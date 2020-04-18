@@ -1,0 +1,38 @@
+rsi // base da string
+rcx // n[]
+ebx // base numerica
+eax // i
+rdx // atual
+
+// Converte char para int
+  if(c > 57)
+    ret = c - 55;
+  else 
+    ret = c - 48;
+
+// int BigIntRead(BigInt n, int b);
+// %rdi = n; rsi = b;
+    movq  %rdi, %rcx  # %rcx = n[]
+    movl  %esi, %ebx; # %ebx = b
+    movl  $0, %eax;   # i = 0
+LB1:
+    leaq    (%rsi,%rax),%rdx  # %rdx = v[i]  
+    incl    %eax;             # i++
+    subl    $48,%rdx          # %rdx = %rdx - 48 
+    cmpl    %edx,%ebx         # %edx >= %ebx    
+    jge     INVALID           
+    movl    %edx,(%rcx)       # n[i] = value
+    addl    %ebx,%ecx         # n = n + b
+LC1:
+    cmpl    %eax,$4096        # if i <4096
+    jl      LB1;              # return to loop
+
+
+INVALID:
+    movl    $-1, %eax         # ret = -1
+
+1 2 4 8 BYTES 
+b w l q
+leaq A(B, C, S)
+
+A + B + C * S (s % 2 == 0)
