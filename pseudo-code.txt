@@ -1,9 +1,9 @@
-rsi // base da string
-rcx // n[]
-ebx // base numerica
-eax // i
-rdx // atual
-
+rsi // Posição final da alocação da pilha
+rcx // &(n[])
+e9 // base numerica
+eax // number of bytes read/ i
+rdx // atual algarismo
+r10 // atual 16 bits value
 // Converte char para int
   if(c > 57)
     ret = c - 55;
@@ -12,20 +12,77 @@ rdx // atual
 
 // int BigIntRead(BigInt n, int b);
 // %rdi = n; rsi = b;
-    movq  %rdi, %rcx  # %rcx = n[]
-    movl  %esi, %ebx; # %ebx = b
-    movl  $0, %eax;   # i = 0
+    addl    $4104,%rsi      # so we can go to the start
+    movq    %rdi, %rcx      # %rcx = n[]
+    movl    %esi, %e9;      # %e9 = b
+    movl    $0, %eax;       # i = 0
+// Memory is indexed in bytes so we must iterate 
+// TODO : TRATAR CALEE SAVE DOS %r12, %r11
 LB1:
-    leaq    (%rsi,%rax),%rdx  # %rdx = v[i]  
-    incl    %eax;             # i++
-    subl    $48,%rdx          # %rdx = %rdx - 48 
-    cmpl    %edx,%ebx         # %edx >= %ebx    
-    jge     INVALID           
-    movl    %edx,(%rcx)       # n[i] = value
-    addl    %ebx,%ecx         # n = n + b
+    incl    %eax;               # i++
+    subl    $48,%rdx;           # %rdx = %rdx - 48 ; transforms chat into number
+    cmpl    %edx,$10;           # %edx >= $10 ;  
+    jl      NOT_HEXA;           # Special conversion for hexa>9
+    subq    $7,%edx;            # %edx -= 7 ;
+NOT_HEXA:
+    cmpl    %edx,%e9            # %edx >= %e9    
+    jge     INVALID             # Not in representation range
+// NAIVE APPROACH
+    testl   %e9,$2              # e9 == 2 
+    je      BYNARY
+    testl   %e9,$8              # e9 == 8
+    je      OCTAL
+    testl   %e9,$10             # e9 == 10
+    je      DECIMAL
+HEXA:
+    sall    $28,%edx            # edx << 28; to insert in the most significant bits
+    sarl    $4,%e10;            # e10 >> 4 ; shifting right so it can fit the next hexa    
+    addl    %edx,%e10           # accumulate in the 32 bit
+
+    testl   %e12,$8             # if e12 != 8
+    jne     NO_MEM_STORE;       # do not store de value in the BigInt, for it is not ready yet 
+    movl    %e10,(%rcx)         # n[k] = value
+    movl    $0,%e12             # e12 = 0 ; flush the counter
+    jmp     NO_MEM_STORE;
+BYNARY:
+    sall    $31,%edx            # edx << 31; to insert in the most significant bit
+    sarl    $1,%e10;            # edx >> 1 ; shifting right so it can fit the next bit    
+    addl    %edx,%e10           # accumulate in the 32 bit
+
+    testl   %e12,$10            # if e12 != 32
+    jne     NO_MEM_STORE;       # do not store de value in the BigInt, for it is not ready yet 
+    movl    %e10,(%rcx)         # n[k] = value
+    movl    $0,%e12             # e12 = 0 ; flush the counter
+    jmp     NO_MEM_STORE;
+OCTAL:
+    sall    $26,%edx;           # edx << 29; to insert in the most significant bits
+    sarl    $3,%e10;            # edx >> 3 ; shifting right so it can fit the next octal    
+    addl    %edx,%e10           # accumulate in the 32 bit
+
+    testl   %e12,$10            # if e12 != 10
+    jne     NO_MEM_STORE;       # do not store de value in the BigInt, for it is not ready yet 
+    movl    %e10,(%rcx)         # n[k] = value
+    movl    $0,%e12             # e12 = 0 ; flush the counter
+    jmp     NO_MEM_STORE;
+DECIMAL:
+    sall    $4,%edx;           # edx << 4; to insert in the most significant bits
+    sarl    $1,%e10;            # edx >> 1 ; shifting right so it can fit the next decimal
+    movl    %edx,%e11;    
+    sall    $2,%e11;            # e11 << 2 ; so we can multiply by 4
+    addl    %e11,%edx;
+    addl    %edx,%e10;           # accumulate in the 32 bit
+
+    testl   %e12,$5;            # if e12 != 5
+    jne     NO_MEM_STORE;       # do not store de value in the BigInt, for it is not ready yet 
+    movl    %e10,(%rcx)         # n[k] = value
+    movl    $0,%e12             # e12 = 0 ; flush the counter
+NO_MEM_STORE:    
+    incl    %e12                # e12++ ; counts another shift
+    addl    $4,%ecx             # k = k + 4
 LC1:
-    cmpl    %eax,$4096        # if i <4096
-    jl      LB1;              # return to loop
+    leaq    (%rsi,%rax),%rdx    # %rdx = v[i]
+    cmpl    %rdx,$0             # if v[i] != '\0'
+    jne     LB1;                # return to loop
 
 
 INVALID:
@@ -36,3 +93,5 @@ b w l q
 leaq A(B, C, S)
 
 A + B + C * S (s % 2 == 0)
+
+    sarl    $16,%e10;           # cleans the accumulator (preserving carry over)
