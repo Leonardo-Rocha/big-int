@@ -11,13 +11,25 @@ r10 // atual 16 bits value
     ret = c - 48;
 
 // int BigIntRead(BigInt n, int b);
-// %rdi = n; rsi = b;
-    addl    $4104,%rsi      # so we can go to the start
+// %rdi = n; rsi = b;       
+BigIntRead:
+	pushq	%rbp
+	
+	subq	$4104,%rsp	# Allocate a buffer for 4097-char string
+				# Stack must be 16-byte aligned
+				# 4097+8 = 4105, but 4105 is not
+				# multiple of 16. 4104+8=4112, which
+				# is multiple of 16.
+
+	movq	%rdi,%rcx   # %rcx = n[] 
+	movl 	%esi,%ebx   # %ebx = b
+
+	addl    $4104,%rsi      # so we can go to the start 
     movq    %rdi, %rcx      # %rcx = n[]
     movl    %esi, %e9;      # %e9 = b
     movl    $0, %eax;       # i = 0
-// Memory is indexed in bytes so we must iterate 
-// TODO : TRATAR CALEE SAVE DOS %r12, %r11
+# Memory is indexed in bytes so we must iterate 
+# TODO : TRATAR CALEE SAVE DOS %r12, %r11
 LB1:
     incl    %eax;               # i++
     subl    $48,%rdx;           # %rdx = %rdx - 48 ; transforms chat into number
@@ -25,9 +37,11 @@ LB1:
     jl      NOT_HEXA;           # Special conversion for hexa>9
     subq    $7,%edx;            # %edx -= 7 ;
 NOT_HEXA:
-    cmpl    %edx,%e9            # %edx >= %e9    
-    jge     INVALID             # Not in representation range
-// NAIVE APPROACH
+    cmpl    %edx,%e9            # %edx < %e9    
+    jl     	VALID             	# in representation range
+	movl    $-1, %eax         # ret = -1
+# NAIVE APPROACH
+VALID:
     testl   %e9,$2              # e9 == 2 
     je      BYNARY
     testl   %e9,$8              # e9 == 8
@@ -85,8 +99,24 @@ LC1:
     jne     LB1;                # return to loop
 
 
-INVALID:
-    movl    $-1, %eax         # ret = -1
+
+	movl	$0,%eax		# sys_read
+	movl	$0,%edi		# Standard input
+	leaq	(%rsp),%rsi	# Address of the local buffer
+	movl	$4096,%edx	# Maximum length of the input string
+	syscall
+
+	# After reading the input string, you must check if
+	# it is valid. For example, a base-2 number should have
+	# only the digits [0-1], a base-10 number should have
+	# only the digits 0-9, and so on.
+
+
+	# deallocate the local variable and restore the stack
+	# to where it was at the beginning of the function
+	addq	$4104,%rsp
+	popq	%rbp
+	ret
 
 1 2 4 8 BYTES 
 b w l q
