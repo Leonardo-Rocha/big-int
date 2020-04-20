@@ -30,7 +30,7 @@ char_return:
         ret
 
 // int BigIntRead(BigInt n, int base);
-// %rdi = n; rsi = base;      
+// %rdi = n[]; rsi = base;      
 BigIntRead:
         pushq	%rbp
         subq	$4104,%rsp	# Allocate a buffer for 4097-char string
@@ -39,13 +39,15 @@ BigIntRead:
                     # multiple of 16. 4104+8=4112, which
                     # is multiple of 16.
 
-        # TODO: CRIAR VARIAVEIS PARA ESSES DOIS TEMPORARIOS
-        movq    %rdi,%r8    # t8 = n[]
-        movl    %esi,%r9d   # t9 = b
+        pushq   %rdi # push n[]
+        pushq   %rsi # push base
 
-        ; movq    $base,%rdi
-        ; xorq    %rax,%rax     
-        ; call    printf        # printf("base: %d", base);
+        movq    $base,%rdi
+        xorq    %rax,%rax     
+        call    printf        # printf("base: %d", base);
+
+        popq    %r9   # t9 = b
+        popq    %r8    # t8 = n[]
 
         movl	$0,%eax		# sys_read
         movl	$0,%edi		# Standard input
@@ -66,17 +68,37 @@ buffer_loop_body:
         call    CharToNumber    # converts char to number
         movl    %eax,%r10d
 
+        # After reading the input string, you must check if
+	# it is valid. For example, a base-2 number should have
+	# only the digits [0-1], a base-10 number should have
+	# only the digits 0-9, and so on.
         cmpl    %r9d,%r10d      # num < base    
         jb     	VALID           # in representation range
 	movq    $-1, %rax       # ret = -1
         jmp     BigIntRead_return  
 VALID:  
-        ; movq    $fmt,%rdi
-        ; movq    %r10,%rsi
-        ; xorq    %rax,%rax
-        ; call    printf          # printf("num: %hd", num);
+        pushq   %r8     # push n[]
+        pushq   %r9     # push b
 
-        incl    %r15d
+        # movq    $fmt,%rdi
+        # movq    %r10,%rsi
+        # xorq    %rax,%rax
+        # call    printf          # printf("num: %hd", num);
+
+        # Only for testing
+        movl    %r10d,(%r8,%r15) # n[i] = num
+
+        movq    $fmt,%rdi
+        movq    (%r8,%r15),%rsi
+        xorq    %rax,%rax
+        call    printf          # printf("num: %hd", n[i]);
+
+        popq    %r9   # t9 = b
+        popq    %r8   # t8 = n[]
+
+        # TODO: insert logic here
+
+        incl    %r15d   # i++
 buffer_loop_test:
         cmpq    %r14,%r15         # i < size
         jb      buffer_loop_body
