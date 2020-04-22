@@ -1,50 +1,26 @@
         .section       .data
         
-fmt:    .asciz "%hd\n"
+fmt:    .asciz "%c"
 base:   .asciz "base: %d\n"
 BigInt: .fill 512              # n[512] = {0}
 
         .text
         .globl _start, BigIntRead, BigIntPrint, BigIntToStr
         .globl CharToNumber, Log2, BigIntScale_by10, BigIntDiv10
-        .globl NumberToChar
+        .globl NumberToChar, CalculateReverseCounter
         .extern printf
  
 _start: 
-        movq $BigInt,%rdi # n = BigInt
-        movq $2,%rsi     # b = 10
+        movq    $BigInt,%rdi # n = BigInt
+        movq    $16,%rsi      # b = 2
+        call    BigIntRead   # BigIntRead(BigInt, 2);
 
-        call BigIntRead   # BigIntRead(BigInt, 10);
+        movq    $BigInt,%rdi # n = BigInt
+        movq    $16,%rsi      # b = 2
+        call    BigIntPrint  # BigIntPrint(BigInt, 2)
 
-        movl    $511,%r10d               # i = max size
-        jmp     consume_zeros_condition_main
-consume_zeros_body_main:
-        decl    %r10d                    # i--
-consume_zeros_condition_main:
-        movq    $BigInt,%rdi
-        movb    (%rdi,%r10),%dl        # edx = n[i]
-        cmpb    $0,%dl                 # while(n[i] == 0)
-        je      consume_zeros_body_main
-
-        incl    %r10d
-        jmp     print_main_cond
-print_main_body:
-        decl    %r10d
-        pushq   %r10
-        xorq    %rdx,%rdx
-        movq    $BigInt,%rdi
-        movb    (%rdi,%r10),%dl        # edx = n[i]
-        movq    $fmt,%rdi
-        movl    %edx,%esi
-        xorq    %rax,%rax
-        call    printf 
-        popq    %r10
-print_main_cond:
-        cmpl    $0,%r10d
-        ja      print_main_body
-
-        movq $60,%rax     # exit syscall
-        movq $0,%rdi      # return value: exit(0)
+        movq    $60,%rax     # exit syscall
+        movq    $0,%rdi      # return value: exit(0)
         syscall
 
 // int Log2(int num) returns the Log2 of a power of 2
@@ -111,7 +87,6 @@ BigIntRead:
 
         movl    %r8d,%edi       # edi = base
         call    Log2            # rax = log2(base)
-        
         movq    %rax,%r9        # t9 = log2(base)
         
         movl	$0,%eax		# sys_read
@@ -123,22 +98,14 @@ BigIntRead:
 
         
         movl    $0,%ecx         # i = 0
-        movl    %eax,%edi       # t14 = size
+        movl    %eax,%edi       # rdi = size
         decl    %edi            # size-- to remove '\0'
-        # k_max = (size * log2(base)) >> 3
-        movl    %edi,%r12d      # reverse_counter = size
-BREAK:        
-        movl    %r12d,%r13d     # t13 = reverse_counter
-        sarl    $3,%r12d        # divide by 8 to get the number of entries
-        andl    $0x07,%r13d     # t13 %= 8
-        cmpl    $0,%r13d        
-        je      no_RC_increment
-        incl    %r12d           # sum to allign by Bytes
-no_RC_increment:
-        movl    %r12d,%eax      # copy reverse_counter to multiplicand
-        imull   %r9d            # numEntry * log2(base) 
-        movl    %eax,%r12d      # store lower 4 bytes at r12d.      
-
+        pushq   %rdi
+        movl    %r9d,%esi       # rsi = log2(base)
+        call    CalculateReverseCounter   
+        movl    %eax,%r12d      # store lower 4 bytes at r12d.
+        popq    %rdi
+        
         movl    %edi,%r13d      # t13 = size 
         andl    $0x07,%r13d     # t13 = size % 8
         movl    $8,%r11d        # shifts_counter = 8 
@@ -241,29 +208,39 @@ scale_cond:
 // rdi = n[]; rsi = base;
 BigIntPrint:
         pushq	%rbp
-        subq    $512,%rsp
+        subq    $4098,%rsp
 
         movq    %rsi,%rdx
         movq    %rsp,%rsi
         call    BigIntToStr
+        movq    %rax,%rbx        
 
         xorl    %ecx,%ecx       # i = 0
-print: 
+print:  
+        pushq   %rcx
         movq    $1,%rax
         movq    $1,%rdi
-        xorq    %rsi,%rsi
-        addq    %rsp,%rsi
+        movq    %rbx,%rsi
         addq    %rcx,%rsi
         movq    $1,%rdx
         syscall                 # sys_write(stdout, rsp + i, 1)
+        popq    %rcx
 print_condition:
-        incl    %ecx            # i++
-        movq    (%rsp,%rcx),%r8 # t8 = *(rsi + i)
-        cmpl    $0,%r8d
+        incl    %ecx                    # i++
+        movb    (%rbx,%rcx),%r8b        # t8 = *(rsi + i)
+        cmpb    $0,%r8b
         jne     print
+        movq    $10,(%rbx,%rcx)        # print '\n'
+        
+        movq    $1,%rax
+        movq    $1,%rdi
+        movq    %rbx,%rsi
+        addq    %rcx,%rsi
+        movq    $1,%rdx
+        syscall                         # sys_write(stdout, rsp + i, 1)
 
         # free the stack
-        addq	$512,%rsp
+        addq	$4098,%rsp
         popq	%rbp
         ret 
 
@@ -275,7 +252,7 @@ print_condition:
 // r8 = b (base - 2, 8, 10, 16)
 // r9 = log2(base)
 // r10 = i
-// r11 = clear_shift
+// r11 = reverse_counter
 BigIntToStr:
         movq    %rdi,%rbx
         movq    %rdx,%r8
@@ -283,37 +260,70 @@ BigIntToStr:
         call    Log2    
         movl    %eax,%r9d               # r9 = log2(base)
 
-        movl    $511,%r10d               # i = max size
+        movl    $511,%r10d              # i = max size
         jmp     consume_zeros_condition
 consume_zeros_body:
-        decl    %r10d                    # i--
+        decl    %r10d                   # i--
 consume_zeros_condition:
-        movb    (%rbx,%r10),%dl        # edx = n[i]
-        cmpb    $0,%dl                 # while(n[i] == 0)
+        movb    (%rbx,%r10),%dl         # edx = n[i]
+        cmpb    $0,%dl                  # while(n[i] == 0)
         je      consume_zeros_body
         
+        pushq   %rsi                    # store buffer
+        movl    %r10d,%edi              # rdi = size
+        movl    %r9d,%esi               # rsi = log2(base)
+        call    CalculateReverseCounter # CalculateReverseCounter(size, log2Base)
+        movl    %eax,%r11d              # reverse_counter = ret
+        popq    %rsi                    # restore buffer
+
         cmpl    $10,%r8d 
-        je      set_decimal     # if(base == 10) 
+        je      set_decimal             # if(base == 10) 
+              
+        xorl    %r13d,%r13d             # j = 0
         jmp     power_of_two_condition
 power_of_two_body:
-        movl    (%rbx,%r10),%edx        # edx = n[i]
-        movl    $4,%r11d
-        subl    %r9d,%r11d              # clear_shift = 4 - log2(base)
-        movl    %r11d,%ecx              # sal must be used with cl  
-        sall    %cl,%edx                # edx << clear_shift
-        sarl    %cl,%edx                # edx >> clear_shift
+        movl    (%rbx,%r11),%edx        # edx = n[reverse_counter]
+        subl    %r9d,%r11d              # reverse_counter -= log2(base)
+        movl    $32,%r12d               # shift_width 
+        movl    %r9d,%r14d              # t14 = log2(base)
+        shll    $3,%r14d                # t14 *= 8
+        subl    %r14d,%r12d             # t12 = 32 - log2(base) * 8
+        movl    %r12d,%ecx              # sal must be used with cl
+        shll    %cl,%edx
+        movl    $32,%r12d               # shift_width 
+        subl    %r9d,%r12d              # shift_width = 32 - log2(base)
+        xorl    %r14d,%r14d             # k = 0
+        jmp     byte_cond
+byte_body:
+        movl    %edx,%eax               # store edx in a temporary
+        movl    %r12d,%ecx              # sar must be used with cl      
+        shrl    %cl,%eax                # accumulator >>= log2(base); to move the desired write to the least significat byte    
         
-        # loop interno dentro dos bytes seguindo a base
-        # converter para char e mandar para (rsi + i) buff[i]
+        movl    %r9d,%ecx               # sal must be used with cl
+        shll    %cl,%edx                # erase already written bits
+
+        movl    %eax,%edi               # argument num
+        call    NumberToChar            # NumberToChar(num)
         
-        decl    %r10d                   # i--
+        movb    %al,(%rsi,%r13)         # buf[j] = char
+        incl    %r13d                   # j++
+        incl    %r14d                   # k++
+byte_cond:
+        cmpl    $8,%r14d                # if k < 8
+        jb      byte_body              
+        cmpl    %r9d,%r10d
+        jae     valid_i
+        movl    %r9d,%r10d
+valid_i:
+        subl    %r9d,%r10d
 power_of_two_condition:
-        cmpl    $0,%r10d                 # loopar até i (buf_size) >= 0
-        jae     power_of_two_body
+        cmpl    $0,%r10d                 # buf_size >= 0
+        ja     power_of_two_body
 set_decimal:
         # TODO: fill code
         
-        movb    $0,(%rsi,%r10)          # add '\0' in the end of the string  
+        movb    $0,(%rsi,%r13)          # add '\0' in the end of the string  
+        movq    %rsi,%rax               # ret = buffer
         ret
 
 # Bigint n = %rdi, numBytes = %rsi
@@ -364,4 +374,21 @@ DIV_RETURN:
         popq    %r12            # restore temporary
         popq    %r13            # restore temporary
         popq    %rbp            # restore frame
+        ret
+
+// int CalculateReverseCounter(int size, int log2Base)
+// %rdi = size, %rsi = log2Base
+CalculateReverseCounter:
+        pushq   %rdi
+        # k_max = (size * log2(base)) >> 3
+        movl    %edi,%r13d      # t13 = reverse_counter
+        sarl    $3,%edi        # divide by 8 to get the number of entries
+        andl    $0x07,%r13d     # t13 %= 8
+        cmpl    $0,%r13d        
+        je      no_RC_increment
+        incl    %edi            # sum to allign by Bytes
+no_RC_increment:
+        movl    %edi,%eax       # copy reverse_counter to multiplicand
+        imull   %esi            # numEntry * log2(base)    
+        popq    %rdi
         ret

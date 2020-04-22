@@ -22,6 +22,34 @@ _start:
         xorq    %rax,%rax
         call    printf 
 
+                movl    $511,%r10d               # i = max size
+        jmp     consume_zeros_condition_main
+consume_zeros_body_main:
+        decl    %r10d                    # i--
+consume_zeros_condition_main:
+        movq    $BigInt,%rdi
+        movb    (%rdi,%r10),%dl        # edx = n[i]
+        cmpb    $0,%dl                 # while(n[i] == 0)
+        je      consume_zeros_body_main
+
+        incl    %r10d
+        jmp     print_main_cond
+print_main_body:
+        decl    %r10d
+        pushq   %r10
+        xorq    %rdx,%rdx
+        movq    $BigInt,%rdi
+        movb    (%rdi,%r10),%dl        # edx = n[i]
+        movq    $fmt,%rdi
+        movl    %edx,%esi
+        xorq    %rax,%rax
+        call    printf 
+        popq    %r10
+print_main_cond:
+        cmpl    $0,%r10d
+        ja      print_main_body
+
+
         movq $60,%rax    # exit syscall
         movq $0,%rdi     # return value: exit(0)
         syscall
