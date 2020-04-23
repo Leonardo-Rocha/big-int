@@ -22,7 +22,7 @@ _start:
         xorq    %rax,%rax
         call    printf 
 
-                movl    $511,%r10d               # i = max size
+        movl    $511,%r10d               # i = max size
         jmp     consume_zeros_condition_main
 consume_zeros_body_main:
         decl    %r10d                    # i--
@@ -48,7 +48,6 @@ print_main_body:
 print_main_cond:
         cmpl    $0,%r10d
         ja      print_main_body
-
 
         movq $60,%rax    # exit syscall
         movq $0,%rdi     # return value: exit(0)
