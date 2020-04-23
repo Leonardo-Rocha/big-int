@@ -7,17 +7,18 @@ BigInt: .fill 512              # n[512] = {0}
         .text
         .globl _start, BigIntRead, BigIntPrint, BigIntToStr
         .globl CharToNumber, Log2, BigIntScale_by10, BigIntDiv10
-        .globl NumberToChar, CalculateReverseCounter, _BigIntRead
-        .globl BigIntAdd
+        .globl NumberToChar, CalculateReadReverseCounter, _BigIntRead
+        .globl CalculateWriteReverseCounter
+        .globl BigIntAdd, BigIntNeg, BigIntSub
         .extern printf
  
 _start: 
         movq    $BigInt,%rdi # n = BigInt
-        movq    $2,%rsi     # b = 2
+        movq    $8,%rsi     # b = 2
         call    BigIntRead   # BigIntRead(BigInt, 2);
         
         movq    $BigInt,%rdi # n = BigInt
-        movq    $2,%rsi      # b = 2
+        movq    $2,%rsi     # b = 2
         call    BigIntPrint  # BigIntPrint(BigInt, 2)
 
         movq    $60,%rax     # exit syscall
@@ -68,6 +69,7 @@ char_return:
 // r9 = rsi      
 BigIntRead:
         pushq	%rbp
+        pushq   %rcx
         pushq   %r8
         pushq   %r9
         subq	$4104,%rsp	# Allocate a buffer for 4097-char string
@@ -87,17 +89,19 @@ BigIntRead:
         movq    %r8,%rdi 
         movq    %r9,%rsi
         movq    %rsp,%rdx
-        call    _BigIntRead     # _BigIntRead(n, base, buf)
+        movl    %eax,%ecx
+        call    _BigIntRead     # _BigIntRead(n, base, buf, size)
 
         # back to where it was at the beginning of the function
         addq	$4104,%rsp
         popq    %r9 
         popq    %r8
+        popq    %rcx
         popq	%rbp
         ret
 
-// int _BigIntRead(BigInt n, int base, char *buffer)
-// rdi = n[]; rsi = base; rdx = buffer
+// int _BigIntRead(BigInt n, int base, char *buffer, size)
+// rdi = n[]; rsi = base; rdx = buffer; rcx = size
 // Used registers:
 // rbx = n[] 
 // r8 = b (base - 2, 8, 10, 16)
@@ -112,7 +116,6 @@ BigIntRead:
 // r13 = buffer
 _BigIntRead:
         pushq   %rbx
-        pushq   %rcx
         pushq   %r8
         pushq   %r9
         pushq   %r10
@@ -122,21 +125,22 @@ _BigIntRead:
         pushq   %rdx
 
         movq    %rdi,%rbx       # rbx = n[]
-        movl    %esi,%r8d       # t8 = b
+        movl    %ecx,%edi       # size = ecx
+        movl    $0,%ecx         # i = 0  
+        movl    %esi,%r8d       # t8 = b    
+        decl    %edi            # size-- to remove '\0'
 
+        pushq   %rdi
         movl    %r8d,%edi       # edi = base
         call    Log2            # rax = log2(base)
         movq    %rax,%r9        # t9 = log2(base)
-        
-        movl    $0,%ecx         # i = 0
-        movl    %eax,%edi       # rdi = size
-        decl    %edi            # size-- to remove '\0'
+        popq    %rdi
+
         pushq   %rdi
         movl    %r9d,%esi       # rsi = log2(base)
-        call    CalculateReverseCounter   
+        call    CalculateReadReverseCounter   
         movl    %eax,%r12d      # store lower 4 bytes at r12d.
         popq    %rdi
-        
         movl    %edi,%r13d      # t13 = size 
         andl    $0x07,%r13d     # t13 = size % 8
         movl    $8,%r11d        # shifts_counter = 8 
@@ -145,8 +149,7 @@ _BigIntRead:
         incl    %r11d           # shifts_counters++
         xorl    %r10d,%r10d     # k = 0
         xorl    %eax,%eax       # accumulator = 0
-        # Loop through the buffer and store each value read in n[].
-BREAK:        
+        # Loop through the buffer and store each value read in n[].    
         popq    %rdx            
         movq    %rdx,%r13      # t13 = buffer
         jmp     buffer_loop_test
@@ -211,7 +214,6 @@ BigIntRead_return:
         popq    %r10 
         popq    %r9
         popq    %r8 
-        popq    %rcx 
         popq    %rbx
         ret
 
@@ -357,9 +359,9 @@ consume_zeros_condition:
  
         pushq   %rsi                    # store buffer
         movl    %r10d,%edi              # rdi = size
-        shll    $3,%edi                 # to get size in bits
         movl    %r9d,%esi               # rsi = log2(base)
-        call    CalculateReverseCounter # CalculateReverseCounter(size, log2Base)
+        incl    %edi                    # size++
+        call    CalculateWriteReverseCounter # CalculateReadReverseCounter(size, log2Base)
         movl    %eax,%r11d              # reverse_counter = ret
         popq    %rsi                    # restore buffer
 
@@ -367,7 +369,7 @@ consume_zeros_condition:
         je      set_decimal             # if(base == 10) 
               
         xorl    %r13d,%r13d             # j = 0
-        addl    %r9d,%r10d              # an extra iteration
+        # addl    %r9d,%r10d              # an extra iteration
         jmp     power_of_two_condition
 power_of_two_body:
         movl    (%rbx,%r11),%edx        # edx = n[reverse_counter]
@@ -404,8 +406,8 @@ byte_cond:
 valid_i:
         subl    %r9d,%r10d
 power_of_two_condition:
-        cmpl    $0,%r10d                 # buf_size >= 0
-        ja      power_of_two_body
+        cmpl    $0,%r11d                # buf_size >= 0
+        jge     power_of_two_body
 set_decimal:
         # TODO: fill code
 
@@ -473,12 +475,12 @@ DIV_RETURN:
         popq    %rbp            # restore frame
         ret
 
-// Size must be in BITS
-// int CalculateReverseCounter(int size, int log2Base)
+// Size must be a number of characters
+// int CalculateReadReverseCounter(int size, int log2Base)
 // %rdi = size, %rsi = log2Base
-CalculateReverseCounter:
-        pushq   %r13
-        # k_max = (size * log2(base)) >> 3
+CalculateReadReverseCounter:       
+        pushq   %r13           
+        # k_max = ceiling(size(chars) >> 3) * log2(base)
         movl    %edi,%r13d      # t13 = reverse_counter
         sarl    $3,%edi         # divide by 8 to get the number of entries
         andl    $0x07,%r13d     # t13 %= 8
@@ -489,6 +491,48 @@ no_RC_increment:
         movl    %edi,%eax       # copy reverse_counter to multiplicand
         imull   %esi            # numEntry * log2(base)    
         popq    %r13
+        ret
+
+// Size must be a number of bits
+// int CalculateWriteReverseCounter(int size, int log2Base)
+// %rdi = size, %rsi = log2Base
+CalculateWriteReverseCounter:   # 1223334444 f(4,3) -> 3
+        pushq   %r13            # 00F0F0F0     f(4,4) -> 0       
+        pushq   %rcx            
+        movl    %edi,%r13d      # t13 = reverse_counter = size
+        cmpl    $3,%esi
+        je      OCTAL_CASE
+        movl    %esi,%ecx       # ecx = log2(base)
+        decl    %ecx            # log2(base)--
+        andl    %ecx,%r13d      # t13 %= log2(base)
+        cmpl    $0,%r13d
+        je      write_reverse_return
+        movl    %esi,%ecx       # ecx = log2(base)
+        subl    %r13d,%ecx      # ecx = log2(base) - size%log2(b)
+        addl    %ecx,%edi       # sum to allign by entries
+        jmp     write_reverse_return
+OCTAL_CASE:    
+        movl    %edi,%ecx               # ecx = size
+        movl	%edi,%eax               # eax = size
+        movl	$1431655766,%edx        # edx = magic number
+        imull	%edx                    # edx = edx * size
+        movl	%ecx,%eax               # eax = size
+        sarl	$31,%eax                # eax = size>>31
+        subl	%eax,%edx               # edx = magic number* size - size>>31
+        movl	%edx,%eax               # eax = size/3 = div_result
+        addl	%eax,%eax               # eax = div_result *2
+	addl	%edx,%eax               # eax = div_result*3
+	subl	%eax,%ecx               # ecx = size - div_result*3 = size%3
+        cmpl    $0,%ecx                 # verifies if size%3 == 0
+        je      write_reverse_return
+        movl    %esi,%r13d              # t13 = log2(b)
+        subl    %ecx,%r13d              # esi = log2(b)-size%3
+        addl    %r13d,%edi              # sum to allign by entries
+write_reverse_return:        
+        subl    %esi,%edi               # size = size - log2(base)
+        movl    %edi,%eax               # ret = reverse_counter
+        popq    %rcx
+        popq    %r13 
         ret
 
 // BigIntSub: xmy = x - y	
@@ -504,7 +548,6 @@ BigIntSub:
         call    BigIntAdd       # xmy = x - y
         popq    %r8             # restore temporary
         ret
-
 
 // BigIntAdd: xpy = x + y				
 // void BigIntAdd(BigInt x, BigInt y, BigInt xpy);	
@@ -552,7 +595,7 @@ BigIntNeg:
         pushq   %r9
         movl    $0,%ecx         # i = 0
         movl    $0,%r8d         # x[i]
-        movl    $1,%r9d        # carry
+        movl    $1,%r9d         # carry
 neg_body:
         movl    (%rdi,%rcx),%r8d        # update x=x[i]
         notl    %r8d
