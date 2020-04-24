@@ -1,8 +1,9 @@
-        .section       .data
-        
-fmt:    .asciz "%hd\n"
-base:   .asciz "base: %d\n"
-BigInt: .fill 512              # n[512] = {0}
+                .section       .data
+
+two_p_32BigInt: .quad 4294967296        # 2^32 
+fmt:            .asciz "%hd\n"
+base:           .asciz "base: %d\n"
+BigInt:         .fill 512               # n[512] = {0}
 
         .text
         .globl _start, BigIntRead, BigIntPrint, BigIntToStr
@@ -14,11 +15,11 @@ BigInt: .fill 512              # n[512] = {0}
  
 _start: 
         movq    $BigInt,%rdi # n = BigInt
-        movq    $8,%rsi     # b = 2
+        movq    $10,%rsi     # b = 2
         call    BigIntRead   # BigIntRead(BigInt, 2);
         
         movq    $BigInt,%rdi # n = BigInt
-        movq    $2,%rsi     # b = 2
+        movq    $16,%rsi     # b = 2
         call    BigIntPrint  # BigIntPrint(BigInt, 2)
 
         movq    $60,%rax     # exit syscall
@@ -197,6 +198,22 @@ DECIMAL:
         popq    %rdi                    # restore buffer_size
         movl    (%rbx),%eax             # accumulator = n[0]
         addl    %edx,%eax               # accumulator += value
+        jno     no_overflow           
+        // Store caller-saved registers
+        pushq   %rdi
+        pushq   %rsi
+        pushq   %rdx 
+        // sum a 2^32 BigInt to solve overflow
+        movq    $two_p_32BigInt,%rdi    # n = two_pow_32[]
+        movq    %rbx,%rsi               # y = n[]         
+        movq    %rbx,%rdx               # xpy = n[]
+        call    BigIntAdd               # BigIntAdd(two_p_32BigInt, n, n)
+
+        // Restore caller-saved registers
+        popq    %rdx 
+        popq    %rsi 
+        popq    %rdi 
+no_overflow:
         movl    %eax,(%rbx)             # n[0] = value    
         incl    %r10d                   # k++
 increment_counters:    
