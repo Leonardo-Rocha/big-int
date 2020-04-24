@@ -373,7 +373,10 @@ consume_zeros_condition:
         movb    (%rbx,%r10),%dl 
         cmpb    $0,%dl                  # while(n[i] == 0)
         je      consume_zeros_body
- 
+
+        cmpl    $10,%r8d 
+        je      decimal_case            # if(base == 10) 
+
         pushq   %rsi                    # store buffer
         movl    %r10d,%edi              # rdi = size
         movl    %r9d,%esi               # rsi = log2(base)
@@ -382,11 +385,7 @@ consume_zeros_condition:
         movl    %eax,%r11d              # reverse_counter = ret
         popq    %rsi                    # restore buffer
 
-        cmpl    $10,%r8d 
-        je      set_decimal             # if(base == 10) 
-              
         xorl    %r13d,%r13d             # j = 0
-        # addl    %r9d,%r10d              # an extra iteration
         jmp     power_of_two_condition
 power_of_two_body:
         movl    (%rbx,%r11),%edx        # edx = n[reverse_counter]
@@ -417,19 +416,42 @@ byte_body:
 byte_cond:
         cmpl    $8,%r14d                # if k < 8
         jb      byte_body              
-        cmpl    %r9d,%r10d
-        jae     valid_i
-        movl    %r9d,%r10d
-valid_i:
-        subl    %r9d,%r10d
 power_of_two_condition:
         cmpl    $0,%r11d                # buf_size >= 0
         jge     power_of_two_body
-set_decimal:
-        # TODO: fill code
+        jmp     to_string_return
 
-to_string_return:      
-        movb    $0,(%rsi,%r13)          # add '\0' in the end of the string  
+decimal_case:
+        incl    %r10d
+        movl    %r10d,%r13d             # string_end = size
+
+        // TODO: fazer uma cópia do big int antes de mandar a div.
+
+        // TODO: pensar em como descobrir o reverse counter do decimal para descobrir a quantidade 
+        // de bytes a serem escritos na linha 448
+        pushq   %rsi                    # store buffer
+        movl    %r10d,%edi              # rdi = size
+        movl    $4,%esi                 # rsi = 4
+        call    CalculateWriteReverseCounter # CalculateReadReverseCounter(size, 4)
+        movl    %eax,%r11d              # reverse_counter = ret
+        popq    %rsi                    # restore buffer
+        
+        jmp     decimal_condition
+decimal_body:
+        decl    %r10d                   # i--
+        subl    $4,%r11d
+        movq    %rbx,%rdi
+        movq    %r11d,%rsi
+        call    BigIntDiv10
+        movl    %eax,%edi               # argument num
+        call    NumberToChar            # NumberToChar(num)
+        movb    %al,(%rsi,%r10)         # buf[j] = char
+decimal_condition:
+        cmpl    $0,%r10d        
+        jge     decimal_body            # end if r10 < 0
+
+to_string_return:        
+        movb    $0,(%rsi,%r13)          # add '\0' in the end of the string
         movq    %rsi,%rax               # ret = buffer
         popq    %r14 
         popq    %r13 
