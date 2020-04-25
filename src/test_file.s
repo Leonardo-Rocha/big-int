@@ -344,7 +344,7 @@ print_return:
 // rdi = n, rsi = *buf, rdx = b
 // rbx = n[] 
 // r8 = b (base - 2, 8, 10, 16)
-// r9 = log2(base)
+// r9 = log2(base) // decimal_copy
 // r10 = i
 // r11 = reverse_counter
 BigIntToStr:
@@ -426,32 +426,42 @@ decimal_case:
         incl    %r10d
         movl    %r10d,%r13d             # string_end = size
 
-        // TODO: fazer uma cópia do big int antes de mandar a div.
-
-        // TODO: pensar em como descobrir o reverse counter do decimal para descobrir a quantidade 
-        // de bytes a serem escritos na linha 448
-        pushq   %rsi                    # store buffer
-        movl    %r10d,%edi              # rdi = size
-        movl    $4,%esi                 # rsi = 4
-        call    CalculateWriteReverseCounter # CalculateReadReverseCounter(size, 4)
-        movl    %eax,%r11d              # reverse_counter = ret
-        popq    %rsi                    # restore buffer
+        subl    $512,%rsp               # allocate 512 Bytes in Stack for a BigIntCopy
+        movq    (%rsp),%r9              # get the address of the local BigIntCopy
         
+        pushq   %rdi
+        pushq   %rsi
+        movq    %r9,%rdi                # argument destination                
+        movq    %rbx,%rsi               # argument source
+        call    BigIntAssign
+        movq    %r9,%rbx                # now rbx->copy
+        popq    %rsi
+        popq    %rdi
+        
+        // TODO: calculate correct max decimal chars 
+        // (only if you are worried about putting a bunch of zeros at the start of the string)
+        movl    %r10d,%r11d
+        shll    $2,%r11d                # max decimal chars (insn't exact, only a superior limit)
         jmp     decimal_condition
 decimal_body:
-        decl    %r10d                   # i--
-        subl    $4,%r11d
-        movq    %rbx,%rdi
-        movq    %r11d,%rsi
-        call    BigIntDiv10
+        decl    %r11d                   # i--
+        pushq   %rsi
+        movq    %rbx,%rdi               # argument BigInt x
+        movq    %r10d,%rsi              # argument numBytes (*)
+        call    BigIntDiv10             # returns n % 10 in eax, and leave the BigInt divided by 10;
+        popq    %rsi
         movl    %eax,%edi               # argument num
         call    NumberToChar            # NumberToChar(num)
-        movb    %al,(%rsi,%r10)         # buf[j] = char
+        movb    %al,(%rsi,%r11)         # buf[j] = char
 decimal_condition:
-        cmpl    $0,%r10d        
-        jge     decimal_body            # end if r10 < 0
+        cmpl    $0,%r11d        
+        jge     decimal_body            # end if r11 < 0
 
 to_string_return:        
+        // TODO: %r13 is not always the end of the string, this is wrong. Implement write counter instead.
+        addl    $512,%rsp               # deallocate the BigIntCopy
+        
+        
         movb    $0,(%rsi,%r13)          # add '\0' in the end of the string
         movq    %rsi,%rax               # ret = buffer
         popq    %r14 
@@ -464,6 +474,10 @@ to_string_return:
         popq    %rbx 
         popq    %rcx 
         ret
+// * Note that this does not decrement. the reason why we stick with the superior limit is because 
+//   it would be costly, or even impossible, to verify when one byte 
+//   no longer has information about the next printed decimal character.
+
 
 # Bigint n = %rdi, numBytes = %rsi
 BigIntDiv10: 
