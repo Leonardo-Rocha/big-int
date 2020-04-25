@@ -10,7 +10,7 @@ BigInt:         .fill 512               # n[512] = {0}
         .globl CharToNumber, Log2, BigIntScale_by10, BigIntDiv10
         .globl NumberToChar, CalculateReadReverseCounter, _BigIntRead
         .globl CalculateWriteReverseCounter
-        .globl BigIntAdd, BigIntNeg, BigIntSub
+        .globl BigIntAdd, BigIntNeg, BigIntSub, BigIntShl, BigIntShar
         .extern printf
  
 _start: 
@@ -608,13 +608,13 @@ BigIntAdd:
         movl    $0,%r10d        # xpy[i]
         movl    $0,%r11d        # carry
 add_body:
-        movl    (%rdi,%rcx),%r8d        # update x=x[i]
-        movl    (%rsi,%rcx),%r9d        # update y=y[i]
+        movl    (%rdi,%rcx,4),%r8d        # update x=x[i]
+        movl    (%rsi,%rcx,4),%r9d        # update y=y[i]
         addl    %r8d,%r9d               # y = x+y
         setb    %r11b                   # carry flag
         movl    %r9d,%r10d              # xpy = x+y
         addl    %r11d,%r10d             # xpy += carry
-        movl    %r10d,(%rdi,%rcx)       # xpy[i] = xpy
+        movl    %r10d,(%rdi,%rcx,4)       # xpy[i] = xpy
         incl    %ecx                    # i++
 add_cond:
         cmpl    $128,%ecx               # i < 128       we operate 32 bits at a time
@@ -636,11 +636,11 @@ BigIntNeg:
         movl    $0,%r8d         # x[i]
         movl    $1,%r9d         # carry
 neg_body:
-        movl    (%rdi,%rcx),%r8d        # update x=x[i]
+        movl    (%rdi,%rcx,4),%r8d        # update x=x[i]
         notl    %r8d
         addl    %r9d,%r8d              # x = -x+ carry
         setb    %r9b                   # carry flag
-        movl    %r8d,(%rdi,%rcx)       # x[i] = -x
+        movl    %r8d,(%rdi,%rcx,4)       # x[i] = -x
         incl    %ecx                   # i++
 neg_cond:
         cmpl    $128,%ecx               # i < 128       we operate 32 bits at a time
@@ -649,3 +649,172 @@ neg_cond:
         popq    %r8
         popq    %rcx
         ret
+
+// BigIntMul: xty = x * y	
+// void BigIntMul(BigInt x, BigInt y, BigInt xty);
+// ARGUMENTS
+// rdi = x
+// rsi = y
+// rdx = xty    
+// LOCALS
+// rcx = i
+// r8  = num_shifts
+// r9  = y_buffer
+// r10 = address_aux / buffer_aux
+// r11 = internal_counter : j
+BigIntMul:
+	pushq   %rcx
+        pushq   %r8
+        pushq   %r9
+        pushq   %r10
+        pushq   %r11
+        movl    $0,%ecx         # i = 0
+        movl    $1,num_shifts   # num_shifts = 1
+        pushq   %rsi
+        movq    %rdi,%r10       # aux = x (address)
+        movq    %rdx,%rdi       # x = xmy (address)
+        movq    %r10,%rsi       # y = aux (address)
+        call    BigIntAssign    # xmy = x (fully)
+        popq    %rsi            # restore y address
+        # from this moment on rdi -> xmy
+        jmp     mul_condition
+mul_body:
+        movl    (%rsi,%rcx,4),%r9d        # y_buffer = y[i]
+        movl    $0,%r11d                # j = 0
+        jmp     mul_intern_condition
+mul_intern_body:
+        # TODO: if this is problematic, attempt cmpl and aux solution
+        testq   0x01,%r9d               # verifies if last bit is positive
+        je      no_shift:
+        pushq   %rsi                    # stores y address
+        movl    %r8d,%esi               # argument num_shifts
+        call    BigIntShl               # xmy << num_shifts if last bit is positive
+        popq    %rsi                    # restores y address
+no_shift:
+        incl    %r8d                    # get the next num_shifts value
+        shrl    %r9d                    # y_buffer >> ; so we can check the next bit
+mul_intern_condition:
+        cmpl    $32,%r11d               # j < 32
+        jb      mul_intern_body
+        incl    %ecx                    # i++
+mul_condition:
+        cmpl    $128,%ecx               # i < 128
+        jb      mul_body
+        popq    %r11
+        popq    %r10
+        popq    %r9
+        popq    %r8
+        popq    %rcx
+        ret     
+
+// BigIntAssign: x = y				
+// void BigIntAssign(BigInt x, BigInt y);
+// rdi = x
+// rsi = y
+// rcx = i
+// r8  = buffer	
+BigIntAssign:
+	pushq   %rcx
+        pushq   %r8
+
+        movl    $0,%ecx         # i = 0 
+        jmp     assign_condition
+assign_body:
+        movl    (%rsi,%rcx,4),%r8d      # buffer = y[i]
+        movl    %r8d,(%rdi,%rcx,4)      # x[i] = buffer
+assign_condition:
+        cmpl    $128,%ecx               # i < 128 we operate in 32 bits
+        jb      assign_body
+
+        popq    %r8
+        popq    %rcx
+        ret
+
+
+// BigIntShl:   bi = bi << num_shifts
+// rdi: BigInt bi
+// rsi: int num_shifts
+// rcx: current_shifts
+// r8 : bi_buffer
+// r9 : internal iterator : i
+// r10: prev_shift_letfover 
+BigIntShl:
+        pushq   %rcx
+        pushq   %r8
+        pushq   %r9
+        pushq   %r10                
+        jmp     shl_condition
+shl_body:
+        movl    %esi,%ecx               # current_shifts = num_shifts
+        andl    $0x01F,%ecx             # current_shifts % 32
+        subl    %ecx,%esi               # calculate remaining shifts
+        movl    $0,%r9d                 # i = 0
+        movl    $0,%r10d                # prev_shift_leftover = 0
+        jmp     shl_intern_condition
+shl_intern_body:
+        movl    (%rdi,%r9,4),%r8d       # bi_buffer = bi[i] ;32 bits at time 
+        shlq    %cl,%r8                 # bi_buffer << current_shifts
+        addl    %r10d,%r8d              # bi_buffer += prev_shift_leftover
+        movl    %r8d,(%rdi,%r9,4)         # bi[i] = bi[i] << current_shifts
+        # TODO: verify if it is possible to shift 32 at once
+        shrq    $16,%r8
+        shrq    $16,%r8                # cleans the attributed 32 bits
+        movl    %r8d,%r10d              # store the leftover
+shl_intern_condition:
+        cmpl    %r9d,$128               # i < 128
+        jb      shl_intern_body
+shl_condition:
+        cmpl    $0,%esi                 # num_shifts > 0
+        ja      shl_body
+
+        popq    %r10
+        popq    %r9
+        popq    %r8
+        popq    %rcx
+        ret
+
+// BigIntShar:   bi = bi << num_shifts
+// rdi: BigInt bi
+// rsi: int num_shifts
+// rcx: current_shifts
+// r8 : bi_buffer
+// r9 : internal iterator : i
+// r10: prev_shift_letfover 
+// r11: prev_shift_aux
+BigIntShar:
+        pushq   %rcx
+        pushq   %r8
+        pushq   %r9
+        pushq   %r10
+        pushq   %r11                
+        jmp     shar_condition
+shar_body:
+        movl    %esi,%ecx               # current_shifts = num_shifts
+        andl    $0x01F,%ecx             # current_shifts % 32
+        subl    %ecx,%esi               # calculate remaining shifts
+        movl    $128,%r9d               # i = 128
+        movl    $0,%r10d                # prev_shift_leftover = 0
+        jmp     shl_intern_condition
+shar_intern_body:
+        movl    -4(%rdi,%r9,4),%r8d     # bi_buffer = bi[i-1] ;32 bits at time 
+        shlq    $31,%r8                 # bi_buffer << 31 ; so we dont lose info
+        shrq    %cl,%r8                 # bi_buffer >> current_shifts
+        movl    %r8d,%r11d              # store the leftover in aux
+        shrq    $31,%r8                 # bi_buffer >> 31
+        addl    %r10d,%r8d              # bi_buffer += prev_shift_leftover
+        movl    %r8d,-4(%rdi,%r9,4)     # bi[i] = bi[i-1] >> current_shifts
+        # TODO: verify if it is possible to shift 32 at once
+        movl    %r11d,%r10d             # get the next leftover
+        shll    %r10d                   # fix to complete 1 + 31 = 32
+shar_intern_condition:
+        cmpl    %r9d,0                  # i > 0
+        ja      shar_intern_body
+shar_condition:
+        cmpl    $0,%esi                 # num_shifts > 0
+        ja      shar_body
+        popq    %r11
+        popq    %r10
+        popq    %r9
+        popq    %r8
+        popq    %rcx
+        ret        
