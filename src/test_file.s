@@ -11,6 +11,7 @@ BigInt:         .fill 512               # n[512] = {0}
         .globl NumberToChar, CalculateReadReverseCounter, _BigIntRead
         .globl CalculateWriteReverseCounter
         .globl BigIntAdd, BigIntNeg, BigIntSub, BigIntShl, BigIntShar
+        .globl BigIntMul, BigIntAssign
         .extern printf
  
 _start: 
