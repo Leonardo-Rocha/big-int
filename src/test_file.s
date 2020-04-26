@@ -1,6 +1,7 @@
                 .section       .data
 
-two_p_32BigInt: .quad 4294967296        # 2^32 
+two_p_32BigInt: .quad 4294967296        # 2^32
+two_p_32String: .asciz "100000000"     # 2^32 
 fmt:            .asciz "%hd\n"
 base:           .asciz "base: %d\n"
 BigInt:         .fill 512               # n[512] = {0}
@@ -118,6 +119,8 @@ BigIntRead:
 // r11 = shifts_counter
 // r12 = reverse_counter
 // r13 = buffer
+// r14 = is_negative
+// r15 = two_p_32BigInt
 _BigIntRead:
         pushq   %rbx
         pushq   %r8
@@ -126,6 +129,8 @@ _BigIntRead:
         pushq   %r11 
         pushq   %r12 
         pushq   %r13
+        pushq   %r14
+        pushq   %r15
         pushq   %rdx
 
         movq    %rdi,%rbx       # rbx = n[]
@@ -139,6 +144,25 @@ _BigIntRead:
         call    Log2            # rax = log2(base)
         movq    %rax,%r9        # t9 = log2(base)
         popq    %rdi
+        # Decimal overflow handling
+        // Allocate a temporary BigInt
+        subl    $512,%rsp
+        movq    (%rsp),%r15
+        // Store caller-saved registers
+        pushq   %rdi
+        pushq   %rsi
+        pushq   %rdx 
+        pushq   %rcx
+        // Create a BigInt from constant
+        movq    %r15,%rdi               # argument BigInt n    
+        movl    $16,%esi                # argument base
+        movq    $two_p_32String,%rdx    # argument buffer
+        movl    $9,%ecx                 # argument size
+        call    _BigIntRead
+        popq   %rdi
+        popq   %rsi
+        popq   %rdx 
+        popq   %rcx    
 
         pushq   %rdi
         movl    %r9d,%esi       # rsi = log2(base)
@@ -156,6 +180,18 @@ _BigIntRead:
         # Loop through the buffer and store each value read in n[].    
         popq    %rdx            
         movq    %rdx,%r13      # t13 = buffer
+        # signal checking
+        movl    $0,%r14d        # is_negative = 0
+        xorq    %rdx,%rdx
+        movb    (%r13,%rcx),%dl # num = buf[0]
+        cmpl    $43,%edx        # buf[0] == '+'
+        jne     not_plus
+        incl    %ecx
+not_plus:
+        cmpl    $45,%edx        # buf[0] == '-'
+        jne     not_minus
+        incl    %ecx
+        movl    $1,%r14d        # is_negative = 1        
         jmp     buffer_loop_test
 buffer_loop_body:    
         xorq    %rdx,%rdx
@@ -202,16 +238,16 @@ DECIMAL:
         movl    (%rbx),%eax             # accumulator = n[0]
         addl    %edx,%eax               # accumulator += value
         jno     no_overflow           
+        
         // Store caller-saved registers
         pushq   %rdi
         pushq   %rsi
         pushq   %rdx 
         // sum a 2^32 BigInt to solve overflow
-        movq    $two_p_32BigInt,%rdi    # n = two_pow_32[]
+        movq    %r15,%rdi               # n = two_pow_32[]
         movq    %rbx,%rsi               # y = n[]         
         movq    %rbx,%rdx               # xpy = n[]
         call    BigIntAdd               # BigIntAdd(two_p_32BigInt, n, n)
-
         // Restore caller-saved registers
         popq    %rdx 
         popq    %rsi 
@@ -227,7 +263,16 @@ buffer_loop_test:
         jb      buffer_loop_body        
         
         xorq    %rax,%rax               # ret = 0
+        # signal correction
+        cmpl    $1,%r14d
+        jne     BigIntRead_return
+        movq    %rbx,%rdi               # argument BigInt x
+        call    BigIntNeg
 BigIntRead_return: 
+        // deallocate
+        addl    $512,%rsp
+        popq    %r15
+        popq    %r14
         popq    %r13
         popq    %r12
         popq    %r11
