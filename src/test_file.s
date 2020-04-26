@@ -145,6 +145,8 @@ _BigIntRead:
         movq    %rax,%r9        # t9 = log2(base)
         popq    %rdi
         # Decimal overflow handling
+        cmpl    $10,%r8d 
+        jne     no_decimal_handling
         // Allocate a temporary BigInt
         subl    $512,%rsp
         movq    (%rsp),%r15
@@ -163,7 +165,7 @@ _BigIntRead:
         popq   %rsi
         popq   %rdx 
         popq   %rcx    
-
+no_decimal_handling:
         pushq   %rdi
         movl    %r9d,%esi       # rsi = log2(base)
         call    CalculateReadReverseCounter   
@@ -269,8 +271,11 @@ buffer_loop_test:
         movq    %rbx,%rdi               # argument BigInt x
         call    BigIntNeg
 BigIntRead_return: 
-        // deallocate
+        // deallocate overflow BigInt 
+        cmpl    $10,%r8d 
+        jne     no_dealloc
         addl    $512,%rsp
+no_dealloc:        
         popq    %r15
         popq    %r14
         popq    %r13
