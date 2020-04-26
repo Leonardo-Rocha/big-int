@@ -1,6 +1,5 @@
                 .section       .data
 
-two_p_32BigInt: .quad 4294967296        # 2^32
 two_p_32String: .asciz "100000000"     # 2^32 
 fmt:            .asciz "%hd\n"
 base:           .asciz "base: %d\n"
@@ -19,11 +18,11 @@ BigInt:         .fill 512               # n[512] = {0}
  
 _start: 
         movq    $BigInt,%rdi # n = BigInt
-        movq    $10,%rsi     # b = 2
+        movq    $2,%rsi     # b = 2
         call    BigIntRead   # BigIntRead(BigInt, 2);
         
         movq    $BigInt,%rdi # n = BigInt
-        movq    $16,%rsi     # b = 2
+        movq    $2,%rsi     # b = 2
         call    BigIntPrint  # BigIntPrint(BigInt, 2)
 
         movq    $60,%rax     # exit syscall
@@ -148,7 +147,7 @@ _BigIntRead:
         cmpl    $10,%r8d 
         jne     no_decimal_handling
         // Allocate a temporary BigInt
-        subl    $512,%rsp
+        subq    $512,%rsp
         movq    (%rsp),%r15
         // Store caller-saved registers
         pushq   %rdi
@@ -191,7 +190,7 @@ no_decimal_handling:
         incl    %ecx
 not_plus:
         cmpl    $45,%edx        # buf[0] == '-'
-        jne     not_minus
+        jne     buffer_loop_test
         incl    %ecx
         movl    $1,%r14d        # is_negative = 1        
         jmp     buffer_loop_test
@@ -274,7 +273,7 @@ BigIntRead_return:
         // deallocate overflow BigInt 
         cmpl    $10,%r8d 
         jne     no_dealloc
-        addl    $512,%rsp
+        addq    $512,%rsp
 no_dealloc:        
         popq    %r15
         popq    %r14
@@ -477,7 +476,7 @@ power_of_two_condition:
 decimal_case:
         incl    %r10d
 
-        subl    $512,%rsp               # allocate 512 Bytes in Stack for a BigIntCopy
+        subq    $512,%rsp               # allocate 512 Bytes in Stack for a BigIntCopy
         movq    (%rsp),%r9              # get the address of the local BigIntCopy
         
         pushq   %rdi
@@ -502,7 +501,7 @@ decimal_body:
         decl    %r11d                   # m--
         pushq   %rsi
         movq    %rbx,%rdi               # argument BigInt x
-        movq    %r10d,%rsi              # argument numBytes (*)
+        movl    %r10d,%esi              # argument numBytes (*)
         call    BigIntDiv10             # returns n % 10 in eax, and leave the BigInt divided by 10;
         popq    %rsi
         movl    %eax,%edi               # argument num
@@ -513,7 +512,7 @@ decimal_condition:
         jge     decimal_body            # end if r11 < 0
 
 to_string_return:        
-        addl    $512,%rsp               # deallocate the BigIntCopy       
+        addq    $512,%rsp               # deallocate the BigIntCopy       
         
         movb    $0,(%rsi,%r13)          # add '\0' in the end of the string
         movq    %rsi,%rax               # ret = buffer
@@ -737,7 +736,7 @@ BigIntMul:
         pushq   %r10
         pushq   %r11
         movl    $0,%ecx         # i = 0
-        movl    $1,num_shifts   # num_shifts = 1
+        movl    $1,%r8d         # num_shifts = 1
         pushq   %rsi
         movq    %rdi,%r10       # aux = x (address)
         movq    %rdx,%rdi       # x = xmy (address)
@@ -752,8 +751,8 @@ mul_body:
         jmp     mul_intern_condition
 mul_intern_body:
         # TODO: if this is problematic, attempt cmpl and aux solution
-        testq   0x01,%r9d               # verifies if last bit is positive
-        je      no_shift:
+        testl   $0x01,%r9d               # verifies if last bit is positive
+        je      no_shift
         pushq   %rsi                    # stores y address
         movl    %r8d,%esi               # argument num_shifts
         call    BigIntShl               # xmy << num_shifts if last bit is positive
@@ -829,7 +828,7 @@ shl_intern_body:
         shrq    $16,%r8                # cleans the attributed 32 bits
         movl    %r8d,%r10d              # store the leftover
 shl_intern_condition:
-        cmpl    %r9d,$128               # i < 128
+        cmpl    $128 ,%r9d              # i < 128
         jb      shl_intern_body
 shl_condition:
         cmpl    $0,%esi                 # num_shifts > 0
@@ -1031,7 +1030,7 @@ BigIntLT:
         pushq   %r8
         pushq   %r9
 
-        movl    $127%ecx        # i = 127
+        movl    $127,%ecx        # i = 127
         movl    $1,%eax         # LT_flag = 1
         jmp     LT_condition
 LT_body:
@@ -1126,7 +1125,7 @@ x_is_positive:
 y_is_positive:        
         popq    %rdi
         # make a big int local: mod
-        subl    $512,%rsp       # allocate 512 bytes for BigInt mod in the stack
+        subq    $512,%rsp       # allocate 512 bytes for BigInt mod in the stack
         movq    (%rsp),%r8      # get the effective address of mod
         pushq   %rdi
         pushq   %rsi
@@ -1166,8 +1165,8 @@ div_body:
 dividend_LT_mod:        
         # this is subtraction of the long division 
         pushq   %rdx
-        movl    %r8,%rdi                # argument mod
-        movl    %r8,%rdx                # argument destination
+        movq    %r8,%rdi                # argument mod
+        movq    %r8,%rdx                # argument destination
         call    BigIntSub               # mod = mod - y                            
         popq    %rdx
         popq    %rdi
@@ -1181,7 +1180,7 @@ dividend_LT_mod:
         pushq   %rcx
         movb    %r13b,%cl               # shl must be used with cl
         shlb    %cl,%al                 # so we can set the right bit
-        addl    %al,%r14b               # so we dont lose info
+        addb    %al,%r14b               # so we dont lose info
         movb    %r14b,(%rdx,%r9)        # xdy [num_shifts] = xdy_buffer
         popq    %rcx
         # we get the remaining size in mod to see if we can make another step in the division
@@ -1206,7 +1205,7 @@ xdiv_signal_restored:
         call    BigIntNeg       # y = ~y
         popq    %rdi
 ydiv_signal_restored:
-        addl    $512,%rsp
+        addq    $512,%rsp
         popq    %r14
         popq    %r13
         popq    %r12
@@ -1344,8 +1343,8 @@ mod_body:
 mod_dividend_LT_mod:        
         # this is subtraction of the long division 
         pushq   %rdx
-        movl    %rdx,%rdi                # argument mod
-        movl    %rdx,%rdx                # argument destination
+        movq    %rdx,%rdi                # argument mod
+        movq    %rdx,%rdx                # argument destination
         call    BigIntSub               # mod = mod - y                            
         popq    %rdx
         popq    %rdi
@@ -1371,7 +1370,7 @@ xmod_signal_restored:
         call    BigIntNeg       # y = ~y
         popq    %rdi
 ymod_signal_restored:
-        addl    $512,%rsp
+        addq    $512,%rsp
         popq    %r14
         popq    %r13
         popq    %r12
@@ -1379,4 +1378,4 @@ ymod_signal_restored:
         popq    %r10
         popq    %r9
         popq    %r8
-        ret        
+        ret 
