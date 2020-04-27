@@ -1,6 +1,6 @@
                 .section       .data
 
-two_p_32String: .asciz "100000000"     # 2^32 
+two_p_32BigInt: .quad 4294967296 
 fmt:            .asciz "%hd\n"
 base:           .asciz "base: %d\n"
 BigInt:         .fill 512               # n[512] = {0}
@@ -22,7 +22,7 @@ _start:
         call    BigIntRead   # BigIntRead(BigInt, 2);
         
         movq    $BigInt,%rdi # n = BigInt
-        movq    $2,%rsi     # b = 2
+        movq    $10,%rsi      # b = 2
         call    BigIntPrint  # BigIntPrint(BigInt, 2)
 
         movq    $60,%rax     # exit syscall
@@ -121,6 +121,7 @@ BigIntRead:
 // r14 = is_negative
 // r15 = two_p_32BigInt
 _BigIntRead:
+        pushq   %rbp 
         pushq   %rbx
         pushq   %r8
         pushq   %r9
@@ -130,7 +131,6 @@ _BigIntRead:
         pushq   %r13
         pushq   %r14
         pushq   %r15
-        pushq   %rdx
 
         movq    %rdi,%rbx       # rbx = n[]
         movl    %ecx,%edi       # size = ecx
@@ -148,22 +148,13 @@ _BigIntRead:
         jne     no_decimal_handling
         // Allocate a temporary BigInt
         subq    $512,%rsp
-        movq    (%rsp),%r15
-        // Store caller-saved registers
+        movq    %rsp,%r15
         pushq   %rdi
-        pushq   %rsi
-        pushq   %rdx 
-        pushq   %rcx
-        // Create a BigInt from constant
-        movq    %r15,%rdi               # argument BigInt n    
-        movl    $16,%esi                # argument base
-        movq    $two_p_32String,%rdx    # argument buffer
-        movl    $9,%ecx                 # argument size
-        call    _BigIntRead
-        popq   %rdi
-        popq   %rsi
-        popq   %rdx 
-        popq   %rcx    
+        movq    %r15,%rdi
+        call    BigIntZero
+        popq    %rdi
+        movq    $4294967296,%r14
+        movq    %r14,(%rsp)     # two_p_32BigInt = 2^32
 no_decimal_handling:
         pushq   %rdi
         movl    %r9d,%esi       # rsi = log2(base)
@@ -178,8 +169,7 @@ no_decimal_handling:
         incl    %r11d           # shifts_counters++
         xorl    %r10d,%r10d     # k = 0
         xorl    %eax,%eax       # accumulator = 0
-        # Loop through the buffer and store each value read in n[].    
-        popq    %rdx            
+        # Loop through the buffer and store each value read in n[].            
         movq    %rdx,%r13      # t13 = buffer
         # signal checking
         movl    $0,%r14d        # is_negative = 0
@@ -238,7 +228,7 @@ DECIMAL:
         popq    %rdi                    # restore buffer_size
         movl    (%rbx),%eax             # accumulator = n[0]
         addl    %edx,%eax               # accumulator += value
-        jno     no_overflow           
+        jnc     no_overflow           
         
         // Store caller-saved registers
         pushq   %rdi
@@ -284,6 +274,7 @@ no_dealloc:
         popq    %r9
         popq    %r8 
         popq    %rbx
+        popq    %rbp
         ret
 
 // void BigIntScale_by10(BigInt n, int numBytes)
@@ -399,6 +390,7 @@ print_return:
 // r10 = i
 // r11 = reverse_counter
 BigIntToStr:
+        pushq   %rbp
         pushq   %rcx 
         pushq   %rbx 
         pushq   %r8 
@@ -476,17 +468,8 @@ power_of_two_condition:
 decimal_case:
         incl    %r10d
 
-        subq    $512,%rsp               # allocate 512 Bytes in Stack for a BigIntCopy
-        movq    (%rsp),%r9              # get the address of the local BigIntCopy
-        
-        pushq   %rdi
-        pushq   %rsi
-        movq    %r9,%rdi                # argument destination                
-        movq    %rbx,%rsi               # argument source
-        call    BigIntAssign
-        movq    %r9,%rbx                # now rbx->copy
-        popq    %rsi
-        popq    %rdi
+        subq    $512,%rsp             # allocate 512 Bytes in Stack for a BigIntCopy
+        movq    %rsp,%r9              # get the address of the local BigIntCopy
         
         # NOTE: calculation of correct max decimal chars might be unecessary, considering zeros are already trimmed in print 
         movl    %r10d,%r11d
@@ -496,9 +479,27 @@ decimal_case:
         movl    $1237,%r11d               
 in_string_limit:
         movl    %r11d,%r13d             # string_end = size
+        
+        pushq   %rdi
+        pushq   %rsi
+        movq    %r9,%rdi                # argument destination                
+        movq    %rbx,%rsi               # argument source
+        call    BigIntAssign
+        movq    %r9,%rbx                # now rbx->copy
+        
+        movl    %rbx,%rdi
+        call    IsBigIntNeg
+        cmpl    $0,%eax                 # check return
+        je      not_neg
+        call    BigIntNeg       
+        
+        movb    $45,(%rsi)              # buf[m] = '-'
+not_neg:
+        popq    %rsi
+        popq    %rdi
+        
         jmp     decimal_condition
 decimal_body:
-        decl    %r11d                   # m--
         pushq   %rsi
         movq    %rbx,%rdi               # argument BigInt x
         movl    %r10d,%esi              # argument numBytes (*)
@@ -506,14 +507,14 @@ decimal_body:
         popq    %rsi
         movl    %eax,%edi               # argument num
         call    NumberToChar            # NumberToChar(num)
-        movb    %al,(%rsi,%r11)         # buf[m] = char
+        movb    %al,-1(%rsi,%r11)       # buf[m] = char
+        decl    %r11d                   # m--
 decimal_condition:
         cmpl    $0,%r11d        
-        jge     decimal_body            # end if r11 < 0
+        jg      decimal_body            # end if r11 < 0
 
-to_string_return:        
-        addq    $512,%rsp               # deallocate the BigIntCopy       
-        
+        addq    $512,%rsp               # deallocate the BigIntCopy 
+to_string_return:              
         movb    $0,(%rsi,%r13)          # add '\0' in the end of the string
         movq    %rsi,%rax               # ret = buffer
         popq    %r14 
@@ -525,59 +526,54 @@ to_string_return:
         popq    %r8 
         popq    %rbx 
         popq    %rcx 
+        popq    %rbp
         ret
+
 // * Note that this does not decrement. the reason why we stick with the superior limit is because 
 //   it would be costly, or even impossible, to verify when one byte 
 //   no longer has information about the next printed decimal character.
-
-
 # Bigint n = %rdi, numBytes = %rsi
 BigIntDiv10: 
         pushq   %rbp            # store frame
+        pushq   %rdx
+        pushq   %r8             # store temporary
+        pushq   %r9             # store temporary
         pushq   %r10            # store temporary
-        pushq   %r11            # store temporary
-        pushq   %r12            # store temporary
-        pushq   %r13            # store temporary
+        xorl    %r10d,%r10d
+        shrl    %esi         # to get size in words
+        incl    %esi
+        jmp     DIV_COND
 DIV_BODY:        
+        xorq    %r8,%r8                 # make sure q=0
+        movw    -2(%rdi,%rsi,2),%r8w    # q = n[size]
+        movl	$1717986919, %edx       # magic number
+	shll    $16,%r10d               # to raise it's significance
+        addl    %r10d,%r8d
+        movl	%r8d,%eax
+	imull	%edx                    # eax * edx = [rdx:rax] 128 bits
+	sarl	$2, %edx
+	movl	%r8d,%eax
+	sarl	$31,%eax
+	subl	%eax,%edx
+	movl	%edx,%eax               # div_result
+	movl    %eax,%r9d
+        movw    %r9w,-2(%rdi,%rsi,2)    # n[size] = q
+        # mod calculation
+        sall	$2,%eax
+	addl	%edx,%eax
+	addl	%eax,%eax
+	subl	%eax,%r8d
+	movl	%r8d,%r10d              # mod result
         decl    %esi                    # size--
-        xorq    %r10,%r10               # make sure q=0
-        movl    (%rsi,%rdi),%r10d       # q = n[size]
-        movl    %r10d,%r12d             # n = q
-        sarl    %r10d                   # q >> 1
-        movl    %r10d,%r11d              # tq = q
-        sarl    %r11d                   # tq >> 1
-        addl    %r11d,%r10d              # q = q + tq; q = (n>>1)+ (n>>2)
-        movl    %r10d,%r11d             # tq = q
-        sarl    $4,%r11d                # tq>>4
-        addl    %r11d,%r10d             # q = q + (q >> 4)
-        movl    %r10d,%r11d             # tq = q
-        sarl    $8,%r11d                # tq>>8
-        addl    %r11d,%r10d             # q = q + (q >> 8)
-        movl    %r10d,%r11d             # tq = q
-        sarl    $16,%r11d               # tq>>16
-        addl    %r11d,%r10d             # q = q + q>>16
-        sarl    $3,%r10d                # q = q >> 3
-        movl    %r10d,%r11d             # tq = q
-        sall    $2,%r10d                # q<<2
-        addl    %r11d,%r10d             # q = (q<<2) + q 
-        sall    %r10d                   # q<<1
-        subl    %r10d,%r12d             # n = n - (((q << 2) + q) << 1)
-        cmpl    $9,%r12d                # (n > 9)
-        jl      DIV_COND
-        incl    %r11d                   # q++
-        subl    $10,%r12d               # n = n -10
 DIV_COND:
-        addl    %r13d,%r11d             # q = q + r
-        movl    %r11d,(%rsi,%rdi)       # n[size] = q
-        movl    %r12d,%r13d             # r = n
         cmpl    $0,%esi                 # size == 0
         jg      DIV_BODY
 DIV_RETURN:
-        movl    %r13d,%eax      # return r ; r = Bigint % 10
+        movl    %r10d,%eax      # return r ; r = Bigint % 10
         popq    %r10            # restore temporary
-        popq    %r11            # restore temporary
-        popq    %r12            # restore temporary
-        popq    %r13            # restore temporary
+        popq    %r9             # restore temporary
+        popq    %r8             # restore temporary
+        popq    %rdx
         popq    %rbp            # restore frame
         ret
 
@@ -585,7 +581,8 @@ DIV_RETURN:
 // int CalculateReadReverseCounter(int size, int log2Base)
 // %rdi = size, %rsi = log2Base
 CalculateReadReverseCounter:       
-        pushq   %r13           
+        pushq   %rdx            
+        pushq   %r13
         # k_max = ceiling(size(chars) >> 3) * log2(base)
         movl    %edi,%r13d      # t13 = reverse_counter
         sarl    $3,%edi         # divide by 8 to get the number of entries
@@ -597,6 +594,7 @@ no_RC_increment:
         movl    %edi,%eax       # copy reverse_counter to multiplicand
         imull   %esi            # numEntry * log2(base)    
         popq    %r13
+        popq    %rdx 
         ret
 
 // Size must be a number of bits
@@ -675,13 +673,13 @@ BigIntAdd:
         movl    $0,%r10d        # xpy[i]
         movl    $0,%r11d        # carry
 add_body:
-        movl    (%rdi,%rcx,4),%r8d        # update x=x[i]
-        movl    (%rsi,%rcx,4),%r9d        # update y=y[i]
+        movl    (%rdi,%rcx,4),%r8d      # update x=x[i]
+        movl    (%rsi,%rcx,4),%r9d      # update y=y[i]
         addl    %r8d,%r9d               # y = x+y
         setb    %r11b                   # carry flag
         movl    %r9d,%r10d              # xpy = x+y
         addl    %r11d,%r10d             # xpy += carry
-        movl    %r10d,(%rdi,%rcx,4)       # xpy[i] = xpy
+        movl    %r10d,(%rdx,%rcx,4)     # xpy[i] = xpy
         incl    %ecx                    # i++
 add_cond:
         cmpl    $128,%ecx               # i < 128       we operate 32 bits at a time
@@ -789,6 +787,7 @@ BigIntAssign:
 assign_body:
         movl    (%rsi,%rcx,4),%r8d      # buffer = y[i]
         movl    %r8d,(%rdi,%rcx,4)      # x[i] = buffer
+        incl    %ecx                    # i++
 assign_condition:
         cmpl    $128,%ecx               # i < 128 we operate in 32 bits
         jb      assign_body
@@ -796,7 +795,6 @@ assign_condition:
         popq    %r8
         popq    %rcx
         ret
-
 
 // BigIntShl:   bi = bi << num_shifts
 // rdi: BigInt bi
@@ -825,8 +823,9 @@ shl_intern_body:
         movl    %r8d,(%rdi,%r9,4)         # bi[i] = bi[i] << current_shifts
         # TODO: verify if it is possible to shift 32 at once
         shrq    $16,%r8
-        shrq    $16,%r8                # cleans the attributed 32 bits
+        shrq    $16,%r8                 # cleans the attributed 32 bits
         movl    %r8d,%r10d              # store the leftover
+        incl    %ecx                    # i++
 shl_intern_condition:
         cmpl    $128 ,%r9d              # i < 128
         jb      shl_intern_body
@@ -873,6 +872,7 @@ shar_intern_body:
         # TODO: verify if it is possible to shift 32 at once
         movl    %r11d,%r10d             # get the next leftover
         shll    %r10d                   # fix to complete 1 + 31 = 32
+        incl    %ecx                    # i++
 shar_intern_condition:
         cmpl    %r9d,0                  # i > 0
         ja      shar_intern_body
@@ -909,6 +909,7 @@ and_body:
         movl    (%rsi,%rcx,4),%r9d      # y_buffer = y[i]
         andl    %r9d,%r8d               # x_buffer = x_buffer & y_buffer
         movl    %r8d,(%rdx,%rcx,4)      # xay[i] = buffer
+        incl    %ecx                    # i++
 and_condition:
         cmpl    $128,%ecx               # i < 128 we operate in 32 bits
         jb      and_body
@@ -940,6 +941,7 @@ or_body:
         movl    (%rsi,%rcx,4),%r9d      # y_buffer = y[i]
         orl     %r9d,%r8d               # x_buffer = x_buffer | y_buffer
         movl    %r8d,(%rdx,%rcx,4)      # xoy[i] = buffer
+        incl    %ecx                    # i++
 or_condition:
         cmpl    $128,%ecx               # i < 128 we operate in 32 bits
         jb      or_body
@@ -949,6 +951,23 @@ or_condition:
         popq    %rcx
         ret
 	
+// BigIntZero: n[i] = 0, 0 <= i <= 512
+// void BigIntZero(BigInt n)
+// rdi = n
+// rcx = i
+BigIntZero:
+        pushq   %rcx
+        movl    $0,%ecx         # i =0
+        jmp     zero_condition
+zero_body:
+        movl    $0,(%rdi,%rcx,4) # n[i] = 0
+        incl    %ecx
+zero_condition:
+        cmpl    $128,%ecx       # i < 128
+        jb      zero_body
+        popq    %rcx
+        ret
+
 // BigIntXor: xxy = x ^ y	
 // void BigIntXor(BigInt x, BigInt y, BigInt xxy);
 // ARGUMENTS
@@ -971,6 +990,7 @@ xor_body:
         movl    (%rsi,%rcx,4),%r9d      # y_buffer = y[i]
         xorl    %r9d,%r8d               # x_buffer = x_buffer ^ y_buffer
         movl    %r8d,(%rdx,%rcx,4)      # xxy[i] = buffer
+        incl    %ecx                    # i++
 xor_condition:
         cmpl    $128,%ecx               # i < 128 we operate in 32 bits
         jb      xor_body
@@ -979,7 +999,6 @@ xor_condition:
         popq    %r8
         popq    %rcx
         ret
-	
 
 // BigIntEq: returns x == y	
 // int BigIntEq(BigInt x, BigInt y);
@@ -1230,7 +1249,6 @@ IsBigIntNeg:
         popq    %r8
         ret
 
-
 // Returns the size in bits of a BigInt
 // rdi  = x 
 // r8   = size in bits
@@ -1262,10 +1280,6 @@ get_size_return:
         popq    %r8
         popq    %r9
         ret
-
-
-
-
 
 // BigIntMod: xmy = x % y	
 // void BigIntMod(BigInt x, BigInt y, BigInt xmy);
