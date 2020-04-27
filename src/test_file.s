@@ -37,23 +37,85 @@ _start:
         movq    $10,%rsi      # b = 2
         call    BigIntPrint  # BigIntPrint(BigInt, 2)
 
-        movq    $BigInt,%rdi 
+        # Test unary operations
+        movq     $BigInt,%rdi
+        movq     $10,%rsi
+        call     BigIntPrint
+
+        movq     $BigInt,%rdi
+        call     BigIntNeg
+
+        movq     $BigInt,%rdi
+        movq     $10,%rsi
+        call     BigIntPrint
+        
+        movq     $BigInt,%rdi
+        call     BigIntNeg
+
+        # Test shifts
+        movq    $BigInt,%rdi
+        movq    $2,%rsi
+        call    BigIntPrint
+
+        movq    $BigInt,%rdi
+        movq    $3,%rsi
+        call    BigIntShl
+
+        movq    $BigInt,%rdi
+        movq    $2,%rsi
+        call    BigIntPrint
+
+        movq    $BigInt,%rdi
+        movq    $3,%rsi
+        call    BigIntShar
+
+        movq    $BigInt,%rdi
+        movq    $2,%rsi
+        call    BigIntPrint
+        
+        # Test Logical operations
+        movq    $BigInt2,%rdi
+        movq    $2,%rsi
+        call    BigIntPrint
+
+        movq    $BigInt,%rdi
         movq    $BigInt2,%rsi
-        movq    $BigInt2,%rdx 
-        call    BigIntDiv
+        movq    $BigInt2,%rdx
+        call    BigIntOr
+
+        movq    $BigInt2,%rdi
+        movq    $2,%rsi
+        call    BigIntPrint
+
+        movq    $BigInt,%rdi
+        movq    $BigInt2,%rsi
+        movq    $BigInt2,%rdx
+        call    BigIntXor
+
+        movq    $BigInt2,%rdi
+        movq    $2,%rsi
+        call    BigIntPrint
 
         movq    $BigInt2,%rdi # n = BigInt
-        movq    $10,%rsi      # b = 2
-        call    BigIntPrint  # BigIntPrint(BigInt, 2)
+        movq    $10,%rsi      
+        movq    $BigIntB,%rdx
+        movq    $2,%rcx
+        call    _BigIntRead   # BigIntRead(BigInt, 2);
 
-        movq    $BigInt,%rdi 
+        movq    $BigInt,%rdi
         movq    $BigInt2,%rsi
-        movq    $BigInt2,%rdx 
-        call    BigIntMul
+        movq    $BigInt2,%rdx
+        call    BigIntAnd
+
+        movq    $BigInt2,%rdi
+        movq    $2,%rsi
+        call    BigIntPrint
 
         movq    $BigInt2,%rdi # n = BigInt
-        movq    $10,%rsi      # b = 2
-        call    BigIntPrint  # BigIntPrint(BigInt, 2)
+        movq    $10,%rsi      
+        movq    $BigIntB,%rdx
+        movq    $2,%rcx
+        call    _BigIntRead   # BigIntRead(BigInt, 2);
 
         movq    $60,%rax     # exit syscall
         movq    $0,%rdi      # return value: exit(0)
@@ -941,9 +1003,9 @@ shar_intern_body:
         # TODO: verify if it is possible to shift 32 at once
         movl    %r11d,%r10d             # get the next leftover
         shll    %r10d                   # fix to complete 1 + 31 = 32
-        incl    %r9d                   # i++
+        decl    %r9d                    # i++
 shar_intern_condition:
-        cmpl    %r9d,0                  # i > 0
+        cmpl    $0,%r9d                  # i > 0
         ja      shar_intern_body
 shar_condition:
         cmpl    $0,%esi                 # num_shifts > 0
@@ -1041,8 +1103,8 @@ zero_condition:
 // void BigIntXor(BigInt x, BigInt y, BigInt xxy);
 // ARGUMENTS
 // rdi = x
-// rsi = y_buffer
-// rdx = xay
+// rsi = y
+// rdx = xxy
 // LOCALS
 // rcx = i
 // r8  = x_buffer
