@@ -1,9 +1,9 @@
-                .section       .data
-
-two_p_32BigInt: .quad 4294967296 
-fmt:            .asciz "%hd\n"
-base:           .asciz "base: %d\n"
-BigInt:         .fill 512               # n[512] = {0}
+        .section       .data
+BigInt: .fill 512               # n[512] = {0}
+BigInt2:.fill 512
+BigInt3:.fill 512
+BigIntA:.asciz "15"
+BigIntB:.asciz "3"
 
         .text
         .globl _start, BigIntRead, BigIntPrint, BigIntToStr
@@ -13,15 +13,45 @@ BigInt:         .fill 512               # n[512] = {0}
         .globl BigIntAdd, BigIntNeg, BigIntSub, BigIntShl, BigIntShar
         .globl BigIntMul, BigIntAssign, BigIntMod, BigIntDiv
         .globl IsBigIntNeg, GetBigIntSizeInBits
-        .globl BigIntEq, BigIntGT, BigIntLT, BigIntXor, BigIntOr, BigIntAnd
+        .globl BigIntEq, BigIntGT, BigIntLT, BigIntXor, BigIntOr, BigIntAnd, ConsumeStringZeros
         .extern printf
  
 _start: 
         movq    $BigInt,%rdi # n = BigInt
-        movq    $2,%rsi     # b = 2
-        call    BigIntRead   # BigIntRead(BigInt, 2);
+        movq    $10,%rsi     
+        movq    $BigIntA,%rdx
+        movq    $3,%rcx
+        call    _BigIntRead   # BigIntRead(BigInt, 2);
+
+        movq    $BigInt2,%rdi # n = BigInt
+        movq    $10,%rsi      
+        movq    $BigIntB,%rdx
+        movq    $2,%rcx
+        call    _BigIntRead   # BigIntRead(BigInt, 2);
         
         movq    $BigInt,%rdi # n = BigInt
+        movq    $10,%rsi      # b = 2
+        call    BigIntPrint  # BigIntPrint(BigInt, 2)
+
+        movq    $BigInt2,%rdi # n = BigInt
+        movq    $10,%rsi      # b = 2
+        call    BigIntPrint  # BigIntPrint(BigInt, 2)
+
+        movq    $BigInt,%rdi 
+        movq    $BigInt2,%rsi
+        movq    $BigInt2,%rdx 
+        call    BigIntDiv
+
+        movq    $BigInt2,%rdi # n = BigInt
+        movq    $10,%rsi      # b = 2
+        call    BigIntPrint  # BigIntPrint(BigInt, 2)
+
+        movq    $BigInt,%rdi 
+        movq    $BigInt2,%rsi
+        movq    $BigInt2,%rdx 
+        call    BigIntMul
+
+        movq    $BigInt2,%rdi # n = BigInt
         movq    $10,%rsi      # b = 2
         call    BigIntPrint  # BigIntPrint(BigInt, 2)
 
@@ -323,55 +353,42 @@ BigIntPrint:
         pushq   %rcx
         pushq   %rdx   
         pushq   %r8
-        pushq   %r9 
-        subq    $4098,%rsp
+        pushq   %r9
+        subq    $4104,%rsp
 
         movq    %rsi,%rdx
         movq    %rsp,%rsi
         call    BigIntToStr
-        movq    %rax,%rbx        
+        movq    %rax,%rbx           
         
-        # do not print zeros on the left.
-        xorl    %ecx,%ecx               # i = 0
-        jmp     consume_zeros_print_condition
-consume_zeros_print_body:
-        incl    %ecx                    # i++
-consume_zeros_print_condition:
-        movb    (%rbx,%rcx),%dl         # edx = n[i]
-        cmpb    $48,%dl                 # while(n[i] == '0')
-        je      consume_zeros_print_body      
-        
-        xorl    %r9d,%r9d
+        xorl    %r9d,%r9d               # i = 0
 print:  
-        pushq   %rcx
         movq    $1,%rax
         movq    $1,%rdi
         movq    %rbx,%rsi
-        addq    %rcx,%rsi
+        addq    %r9,%rsi
         movq    $1,%rdx
         syscall                         # sys_write(stdout, rsp + i, 1)
         cmpl    $-1,%eax
         je      print_return
         incl    %r9d                    # t9++
-        popq    %rcx
 print_condition:
-        incl    %ecx                    # i++
-        movb    (%rbx,%rcx),%r8b        # t8 = *(rsi + i)
-        cmpb    $0,%r8b
+        movb    (%rbx,%r9),%r8b         # t8 = n[i]
+        cmpb    $0,%r8b                 # while n[i] != '\0'
         jne     print
-        movq    $10,(%rbx,%rcx)         # print '\n'
         
+        movq    $10,(%rbx,%r9)         # print '\n'
         movq    $1,%rax
         movq    $1,%rdi
         movq    %rbx,%rsi
-        addq    %rcx,%rsi
+        addq    %r9,%rsi
         movq    $1,%rdx
         syscall                         # sys_write(stdout, rsp + i, 1)
         
         movl    %r9d,%eax               # ret = t9
 print_return:
         # free the stack
-        addq	$4098,%rsp
+        addq	$4104,%rsp
         popq    %r9
         popq    %r8 
         popq    %rdx 
@@ -463,6 +480,7 @@ byte_cond:
 power_of_two_condition:
         cmpl    $0,%r11d                # buf_size >= 0
         jge     power_of_two_body
+        xorq    %r12,%r12
         jmp     to_string_return
 
 decimal_case:
@@ -479,7 +497,7 @@ decimal_case:
         movl    $1237,%r11d               
 in_string_limit:
         movl    %r11d,%r13d             # string_end = size
-        
+        movl    $0, %r12d               # inferior string limit
         pushq   %rdi
         pushq   %rsi
         movq    %r9,%rdi                # argument destination                
@@ -487,13 +505,13 @@ in_string_limit:
         call    BigIntAssign
         movq    %r9,%rbx                # now rbx->copy
         
-        movl    %rbx,%rdi
+        movq    %rbx,%rdi
         call    IsBigIntNeg
         cmpl    $0,%eax                 # check return
         je      not_neg
         call    BigIntNeg       
-        
-        movb    $45,(%rsi)              # buf[m] = '-'
+        movl    $1,%r12d                # set is neg flag   
+        # movb    $48,(%rbx)              # buf[0] = '0'     
 not_neg:
         popq    %rsi
         popq    %rdi
@@ -510,13 +528,19 @@ decimal_body:
         movb    %al,-1(%rsi,%r11)       # buf[m] = char
         decl    %r11d                   # m--
 decimal_condition:
-        cmpl    $0,%r11d        
+        cmpl    %r12d,%r11d               
         jg      decimal_body            # end if r11 < 0
-
         addq    $512,%rsp               # deallocate the BigIntCopy 
-to_string_return:              
+
+to_string_return:          
         movb    $0,(%rsi,%r13)          # add '\0' in the end of the string
         movq    %rsi,%rax               # ret = buffer
+        
+        movq    %rsi,%rdi
+        movq    %r13,%rsi
+        movq    %r12,%rdx 
+        call    ConsumeStringZeros
+        
         popq    %r14 
         popq    %r13 
         popq    %r12 
@@ -529,6 +553,51 @@ to_string_return:
         popq    %rbp
         ret
 
+// ConsumeStringZeros( char * string, int size, int isNeg)
+// rdi = string
+// rsi = size
+// rdx = is neg
+// rcx = j
+// r8  = char_buffer
+// r9  = address_aux
+ConsumeStringZeros:
+        # do not print zeros on the left.
+        pushq   %rcx
+        pushq   %r8
+        pushq   %r9
+        xorl    %ecx,%ecx
+        addl    %edx,%ecx
+        jmp     consume_string_cond
+consume_string_body: 
+        incl    %ecx                    # i++
+consume_string_cond:
+        cmpl    $4104,%ecx               # i < 512
+        je      consume_string_return
+        movb    (%rdi,%rcx),%r8b        # edx = n[i]
+        cmpb    $48,%r8b                # while(n[i] == '0')
+        je      consume_string_body      
+        # e se n zerarmos ecx e começarmos a partir do ecx
+        movl    $0,%r9d                 # address_aux = 0
+        cmpl    $1,%edx                 # if is neg, we shift one less
+        jne     not_negative_st
+        movb    $45,(%rdi)              # buf[m] = '-'    
+        movl    $1,%r9d   
+not_negative_st:        
+        jmp     shift_char_cond
+shift_char_body:                        
+        movb    (%rdi,%rcx),%r8b        # buffer = n[i]
+        movb    %r8b,(%rdi,%r9)         # n[i - shift] = buffer 
+        incl    %r9d                    # address++
+        incl    %ecx                    # i++
+shift_char_cond:
+        cmpl    $4104,%ecx
+        jb      shift_char_body
+consume_string_return: 
+        popq    %r9
+        popq    %r8
+        popq    %rcx
+        ret
+        
 // * Note that this does not decrement. the reason why we stick with the superior limit is because 
 //   it would be costly, or even impossible, to verify when one byte 
 //   no longer has information about the next printed decimal character.
@@ -825,13 +894,13 @@ shl_intern_body:
         shrq    $16,%r8
         shrq    $16,%r8                 # cleans the attributed 32 bits
         movl    %r8d,%r10d              # store the leftover
-        incl    %ecx                    # i++
+        incl    %r9d                    # i++
 shl_intern_condition:
         cmpl    $128 ,%r9d              # i < 128
         jb      shl_intern_body
 shl_condition:
         cmpl    $0,%esi                 # num_shifts > 0
-        ja      shl_body
+        jg      shl_body
 
         popq    %r10
         popq    %r9
@@ -872,7 +941,7 @@ shar_intern_body:
         # TODO: verify if it is possible to shift 32 at once
         movl    %r11d,%r10d             # get the next leftover
         shll    %r10d                   # fix to complete 1 + 31 = 32
-        incl    %ecx                    # i++
+        incl    %r9d                   # i++
 shar_intern_condition:
         cmpl    %r9d,0                  # i > 0
         ja      shar_intern_body
@@ -1145,7 +1214,7 @@ y_is_positive:
         popq    %rdi
         # make a big int local: mod
         subq    $512,%rsp       # allocate 512 bytes for BigInt mod in the stack
-        movq    (%rsp),%r8      # get the effective address of mod
+        movq    %rsp,%r8      # get the effective address of mod
         pushq   %rdi
         pushq   %rsi
         movq    %rdi,%rsi            
@@ -1159,7 +1228,7 @@ y_is_positive:
         call    GetBigIntSizeInBits     # get the size in bits of the dividend
         movl    %eax,%r10d              # catch the return
         popq    %rdi
-
+        jmp     div_cond
 div_body:
         subl    %r10d,%r9d              # calculate the shift of the dividend
         pushq   %rdi
@@ -1169,8 +1238,9 @@ div_body:
         movl    %r9d,%esi               # argument num_shifts
         call    BigIntShl               # y << num_shifts
         # this is to check if the shifted dividend can fit in mod
-        movq    %r8,%rsi                # argument mod
-        call    BigIntGT                # y > mod
+        movq    %rdi,%rsi               # argument y
+        movq    %r8,%rdi                # argument mod
+        call    BigIntLT                # mod < y
         cmpl    $1,%eax                 # check the return
         jne     dividend_LT_mod
         # Case he cannot: check if we can get mod an extra bit or if it is the end
@@ -1178,6 +1248,7 @@ div_body:
         je      div_return
         # shifts dividend right, effectively giving mod an extra bit
         decl    %r9d                    # num_shifts --
+        movq    %rsi,%rdi               # argument y
         movl    $1,%esi                 # argument num_shifts
         call    BigIntShar              # y >>
         popq    %rsi
@@ -1210,7 +1281,7 @@ div_cond:
         movl    %eax,%r9d               # catch the return
         popq    %rdi
         cmpl    %r10d,%r9d              # size_mod >= size_y        
-        jb      div_body        
+        jge     div_body        
         # restore temporaries, dealoccate mod, undo negations
 div_return:        
         cmpb    $0,%r11b
@@ -1241,11 +1312,13 @@ ydiv_signal_restored:
 // rax = return flag 
 IsBigIntNeg:
         pushq   %r8
+        pushq   %r9 
         movl    $0,%eax         # flag = 0
         movl    $511,%r9d       # set address_aux
         movb    (%rdi,%r9),%r8b # get the most significant byte in x
         testb   $0x08,%r8b      # if it is 1, we want to set the flag at 1
         setne   %al             # when the test does not reduce to zero, set
+        popq    %r9
         popq    %r8
         ret
 
@@ -1260,7 +1333,7 @@ GetBigIntSizeInBits:
         jmp     get_size_condition
 get_size_body:
         decl    %r8d                    # i--
-get_size_condition:
+get_size_condition: 
         cmpl    $0,%r8d        
         je      get_size_return         # end_consume if r10 < 0
         movb    -1(%rdi,%r8),%r9b 
@@ -1277,8 +1350,8 @@ calculate_bits_cond:
         je      calculate_bits_body
 get_size_return:        
         movl    %r8d,%eax               # set return
-        popq    %r8
         popq    %r9
+        popq    %r8
         ret
 
 // BigIntMod: xmy = x % y	
