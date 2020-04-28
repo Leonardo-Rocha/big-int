@@ -86,7 +86,7 @@ _start:
         movq    $BigInt2,%rdi
         movq    $2,%rsi
         call    BigIntPrint
-
+        
         movq    $BigInt,%rdi
         movq    $BigInt2,%rsi
         movq    $BigInt2,%rdx
@@ -223,6 +223,8 @@ _BigIntRead:
         pushq   %r13
         pushq   %r14
         pushq   %r15
+
+        call BigIntZero         # immediately zero the BigInt
 
         movq    %rdi,%rbx       # rbx = n[]
         movl    %ecx,%edi       # size = ecx
