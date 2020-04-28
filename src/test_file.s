@@ -4,6 +4,18 @@ BigInt2:.fill 512
 BigInt3:.fill 512
 BigIntA:.asciz "15"
 BigIntB:.asciz "3"
+test_neg: .asciz "\nBigIntNeg(15) = \n"
+test_shl: .asciz "\nBigIntShl(15) = \n"
+test_shr: .asciz "\nBigIntShr(15) = \n"
+test_or:  .asciz "\nBigIntOr(15,3) = \n"
+test_xor: .asciz "\nBigIntXor(15,15) = \n"
+test_and: .asciz "\nBigIntAnd(15,3) = \n"
+test_eq:  .asciz "\nBigIntEq(3,3) = %d\n"
+test_gt:  .asciz "\nBigIntGT(3,15) = %d\n"
+test_lt:  .asciz "\nBigIntLT(3,15) = %d\n"
+test_mul: .asciz "\nBigIntMul(3,15) = \n"
+test_sub: .asciz "\nBigIntSub(15,45) = \n"
+test_div: .asciz "\nBigIntDiv(-30,15) = \n"
 
         .text
         .globl _start, BigIntRead, BigIntPrint, BigIntToStr
@@ -28,35 +40,27 @@ _start:
         movq    $BigIntB,%rdx
         movq    $2,%rcx
         call    _BigIntRead   # BigIntRead(BigInt, 2);
-        
-        movq    $BigInt,%rdi # n = BigInt
-        movq    $10,%rsi      # b = 2
-        call    BigIntPrint  # BigIntPrint(BigInt, 2)
-
-        movq    $BigInt2,%rdi # n = BigInt
-        movq    $10,%rsi      # b = 2
-        call    BigIntPrint  # BigIntPrint(BigInt, 2)
 
         # Test unary operations
-        movq     $BigInt,%rdi
-        movq     $10,%rsi
-        call     BigIntPrint
+        movq    $BigInt,%rdi
+        call    BigIntNeg
 
-        movq     $BigInt,%rdi
-        call     BigIntNeg
+        movq    $test_neg,%rdi
+        xorl    %eax,%eax
+        call    printf
 
-        movq     $BigInt,%rdi
-        movq     $10,%rsi
-        call     BigIntPrint
+        movq    $BigInt,%rdi
+        movq    $10,%rsi
+        call    BigIntPrint
         
-        movq     $BigInt,%rdi
-        call     BigIntNeg
+        movq    $BigInt,%rdi
+        call    BigIntNeg
 
         # Test shifts
-        movq    $BigInt,%rdi
-        movq    $2,%rsi
-        call    BigIntPrint
-
+        movq    $test_shl,%rdi
+        xorl    %eax,%eax
+        call    printf
+        
         movq    $BigInt,%rdi
         movq    $3,%rsi
         call    BigIntShl
@@ -64,6 +68,10 @@ _start:
         movq    $BigInt,%rdi
         movq    $2,%rsi
         call    BigIntPrint
+
+        movq    $test_shr,%rdi
+        xorl    %eax,%eax
+        call    printf
 
         movq    $BigInt,%rdi
         movq    $3,%rsi
@@ -74,14 +82,14 @@ _start:
         call    BigIntPrint
         
         # Test Logical operations
-        movq    $BigInt2,%rdi
-        movq    $2,%rsi
-        call    BigIntPrint
-
         movq    $BigInt,%rdi
         movq    $BigInt2,%rsi
         movq    $BigInt2,%rdx
         call    BigIntOr
+
+        movq    $test_or,%rdi
+        xorl    %eax,%eax
+        call    printf
 
         movq    $BigInt2,%rdi
         movq    $2,%rsi
@@ -92,6 +100,10 @@ _start:
         movq    $BigInt2,%rdx
         call    BigIntXor
 
+        movq    $test_xor,%rdi
+        xorl    %eax,%eax
+        call    printf
+
         movq    $BigInt2,%rdi
         movq    $2,%rsi
         call    BigIntPrint
@@ -101,6 +113,10 @@ _start:
         movq    $BigIntB,%rdx
         movq    $2,%rcx
         call    _BigIntRead   # BigIntRead(BigInt, 2);
+
+        movq    $test_and,%rdi
+        xorl    %eax,%eax
+        call    printf
 
         movq    $BigInt,%rdi
         movq    $BigInt2,%rsi
@@ -116,6 +132,76 @@ _start:
         movq    $BigIntB,%rdx
         movq    $2,%rcx
         call    _BigIntRead   # BigIntRead(BigInt, 2);
+        
+        # Test Comparators
+        movq    $BigInt2,%rdi
+        movq    $BigInt2,%rsi
+        call    BigIntEq
+        
+        movq    $test_eq,%rdi
+        movq    %rax,%rsi
+        xorl    %eax,%eax
+        call    printf
+
+        movq    $BigInt2,%rdi
+        movq    $BigInt,%rsi
+        call    BigIntGT
+
+        movq    $test_gt,%rdi
+        movq    %rax,%rsi
+        xorl    %eax,%eax
+        call    printf
+
+        movq    $BigInt,%rsi
+        movq    $BigInt2,%rdi
+        call    BigIntLT
+
+        movq    $test_lt,%rdi
+        movq    %rax,%rsi
+        xorl    %eax,%eax
+        call    printf
+        
+        # Test Multiplication
+        movq    $BigInt2,%rdi
+        movq    $BigInt,%rsi
+        movq    $BigInt2,%rdx
+        call    BigIntMul
+
+        movq    $test_mul,%rdi
+        xorl    %eax,%eax
+        call    printf
+
+        movq    $BigInt2,%rdi
+        movq    $10,%rsi
+        call    BigIntPrint
+
+        movq    $test_sub,%rdi
+        xorl    %eax,%eax
+        call    printf
+
+        # Test Sub
+        movq    $BigInt,%rdi
+        movq    $BigInt2,%rsi
+        movq    $BigInt2,%rdx
+        call    BigIntSub
+        
+        movq    $BigInt2,%rdi
+        movq    $10,%rsi
+        call    BigIntPrint
+
+        # Test Div
+        movq    $BigInt2,%rdi
+        movq    $BigInt,%rsi
+        movq    $BigInt2,%rdx
+        call    BigIntDiv
+
+        movq    $test_div,%rdi
+        xorl    %eax,%eax
+        call    printf
+
+        movq    $BigInt2,%rdi
+        movq    $10,%rsi
+        call    BigIntPrint
 
         movq    $60,%rax     # exit syscall
         movq    $0,%rdi      # return value: exit(0)
@@ -494,11 +580,11 @@ consume_zeros_body:
         decl    %r10d                   # i--
 consume_zeros_condition:
         cmpl    $0,%r10d        
-        jl      to_string_return        # end_consume if r10 < 0
+        je      end_of_cz               # if r10 == 0
         movb    (%rbx,%r10),%dl 
         cmpb    $0,%dl                  # while(n[i] == 0)
         je      consume_zeros_body
-
+end_of_cz:        
         cmpl    $10,%r8d 
         je      decimal_case            # if(base == 10) 
 
@@ -629,17 +715,20 @@ ConsumeStringZeros:
         pushq   %rcx
         pushq   %r8
         pushq   %r9
+        decl    %esi
         xorl    %ecx,%ecx
         addl    %edx,%ecx
         jmp     consume_string_cond
 consume_string_body: 
         incl    %ecx                    # i++
 consume_string_cond:
-        cmpl    $4104,%ecx               # i < 512
-        je      consume_string_return
+        cmpl    %esi,%ecx               # i < size
+        je      end_of_consume
         movb    (%rdi,%rcx),%r8b        # edx = n[i]
         cmpb    $48,%r8b                # while(n[i] == '0')
         je      consume_string_body      
+end_of_consume:
+        addl    $2,%esi    
         # e se n zerarmos ecx e começarmos a partir do ecx
         movl    $0,%r9d                 # address_aux = 0
         cmpl    $1,%edx                 # if is neg, we shift one less
@@ -654,7 +743,7 @@ shift_char_body:
         incl    %r9d                    # address++
         incl    %ecx                    # i++
 shift_char_cond:
-        cmpl    $4104,%ecx
+        cmpl    %esi,%ecx
         jb      shift_char_body
 consume_string_return: 
         popq    %r9
@@ -775,15 +864,28 @@ write_reverse_return:
 // BigIntSub: xmy = x - y	
 // void BigIntSub(BigInt x, BigInt y, BigInt xmy);
 // rdi = x; rsi = y; rdx = xmy	
-// r8 = tempx
+// r8 = local xmy
 BigIntSub:
-	pushq   %r8             # store temporary
-        movq    %rdi,%r8        # t8 = x
-        movq    %rsi,%rdx       # x = y
-        call    BigIntNeg       # y = -y
-        movq    %r8,%rdi        # x = t8
-        call    BigIntAdd       # xmy = x - y
-        popq    %r8             # restore temporary
+        pushq   %rbp 
+        pushq   %r8
+        subq    $512,%rsp 
+
+        movq    %rsp,%r8        # local xmy = new BigInt
+        
+        pushq   %rdi
+        movq    %r8,%rdi
+        call    BigIntAssign    # local xmy = y (fully)
+        
+        movq    %r8,%rdi       
+        call    BigIntNeg       # local xmy = -y
+        popq    %rdi
+        
+        movq    %r8,%rsi 
+        call    BigIntAdd       # xmy = x + local xmy = x + (-y)
+
+        addq    $512,%rsp
+        popq    %r8
+        popq    %rbp   
         ret
 
 // BigIntAdd: xpy = x + y				
@@ -794,29 +896,36 @@ BigIntSub:
 // r9 = y[i]
 // r10 = xpy[i]
 // r11 = carry
+// r12 = carry_temp
 BigIntAdd:
         pushq   %rcx
         pushq   %r8
         pushq   %r9
         pushq   %r10
         pushq   %r11
-        movl    $0,%ecx         # i = 0
-        movl    $0,%r8d         # x[i]
-        movl    $0,%r9d         # y[i]
-        movl    $0,%r10d        # xpy[i]
-        movl    $0,%r11d        # carry
+        pushq   %r12
+        xorl    %ecx,%ecx         # i = 0
+        xorl    %r8d,%r8d         # x[i]          1...1111110001
+        xorl    %r9d,%r9d         # y[i]          0...0000101101
+        xorl    %r10d,%r10d       # xpy[i]        0...0000011110
+        xorl    %r11d,%r11d       # carry
+        xorl    %r12d,%r12d
 add_body:
         movl    (%rdi,%rcx,4),%r8d      # update x=x[i]
         movl    (%rsi,%rcx,4),%r9d      # update y=y[i]
+        addl    %r11d,%r9d              # y += carry
+        setb    %r12b
         addl    %r8d,%r9d               # y = x+y
         setb    %r11b                   # carry flag
         movl    %r9d,%r10d              # xpy = x+y
-        addl    %r11d,%r10d             # xpy += carry
         movl    %r10d,(%rdx,%rcx,4)     # xpy[i] = xpy
+        addb    %r12b,%r11b
         incl    %ecx                    # i++
 add_cond:
         cmpl    $128,%ecx               # i < 128       we operate 32 bits at a time
-        jb      add_body                
+        jb      add_body     
+        
+        popq    %r12           
         popq    %r11
         popq    %r10
         popq    %r9
@@ -860,37 +969,58 @@ neg_cond:
 // r9  = y_buffer
 // r10 = address_aux / buffer_aux
 // r11 = internal_counter : j
+// r12 = xty local copy
 BigIntMul:
-	pushq   %rcx
+	pushq   %rbp
+        pushq   %rcx
         pushq   %r8
         pushq   %r9
         pushq   %r10
         pushq   %r11
+        pushq   %r12
+        subq    $512,%rsp
+        movq    %rsp,%r12       # r_12 = new BigInt
+
         movl    $0,%ecx         # i = 0
-        movl    $1,%r8d         # num_shifts = 1
+        movl    $0,%r8d         # num_shifts = 1
+
         pushq   %rsi
         movq    %rdi,%r10       # aux = x (address)
-        movq    %rdx,%rdi       # x = xmy (address)
+        movq    %r12,%rdi       # x = x_copy (address)
         movq    %r10,%rsi       # y = aux (address)
-        call    BigIntAssign    # xmy = x (fully)
+        call    BigIntAssign    # x_copy = x (fully)
         popq    %rsi            # restore y address
-        # from this moment on rdi -> xmy
+
+        subq    $512,%rsp
+        movq    %rsp,%r12       # r12 = xty local copy
+
+        pushq   %rdi
+        movq    %r12,%rdi
+        call    BigIntZero      # xty = {0}
+        popq    %rdi
+        # from this moment on rdi -> x_copy
         jmp     mul_condition
 mul_body:
-        movl    (%rsi,%rcx,4),%r9d        # y_buffer = y[i]
-        movl    $0,%r11d                # j = 0
+        movl    (%rsi,%rcx,4),%r9d      # y_buffer = y[i]
+        xorl    %r11d,%r11d             # j = 0
         jmp     mul_intern_condition
 mul_intern_body:
-        # TODO: if this is problematic, attempt cmpl and aux solution
-        testl   $0x01,%r9d               # verifies if last bit is positive
+        testl   $0x01,%r9d              # verifies if last bit is positive
         je      no_shift
         pushq   %rsi                    # stores y address
+        pushq   %rdx
         movl    %r8d,%esi               # argument num_shifts
-        call    BigIntShl               # xmy << num_shifts if last bit is positive
+        call    BigIntShl               # xty << num_shifts if last bit is positive
+        movq    %r12,%rsi               # xty += x << num_shifts
+        movq    %r12,%rdx
+        call    BigIntAdd
+        xorl    %r8d,%r8d
+        popq    %rdx
         popq    %rsi                    # restores y address
 no_shift:
         incl    %r8d                    # get the next num_shifts value
         shrl    %r9d                    # y_buffer >> ; so we can check the next bit
+        incl    %r11d                   # j++
 mul_intern_condition:
         cmpl    $32,%r11d               # j < 32
         jb      mul_intern_body
@@ -898,11 +1028,19 @@ mul_intern_condition:
 mul_condition:
         cmpl    $128,%ecx               # i < 128
         jb      mul_body
+        
+        movq    %rdx,%rdi
+        movq    %r12,%rsi
+        call    BigIntAssign            # xty = xty local copy
+
+        addq    $1024,%rsp
+        popq    %r12
         popq    %r11
         popq    %r10
         popq    %r9
         popq    %r8
         popq    %rcx
+        popq    %rbp
         ret     
 
 // BigIntAssign: x = y				
@@ -1153,7 +1291,7 @@ BigIntEq:
 eq_body:
         movl    (%rdi,%rcx,4),%r8d      # x_buffer = x[i]
         movl    (%rsi,%rcx,4),%r9d      # y_buffer = y[i]
-        cmpl    %r8d,%r9d               # x == y ?
+        cmpl    %r9d,%r8d               # x == y ?
         je      is_equal
         movb    $0,%al                  # equals_flag = 0
         jmp     equals_return           # quit the loop
@@ -1188,15 +1326,17 @@ BigIntLT:
 LT_body:
         movl    (%rdi,%rcx,4),%r8d      # x_buffer = x[i]
         movl    (%rsi,%rcx,4),%r9d      # y_buffer = y[i]
-        cmpl    %r8d,%r9d               # x < y ?
-        jl      is_LT
+        cmpl    %r9d,%r8d               # x < y ?
+        jle      is_LT
         movb    $0,%al                  # LT_flag = 0
         jmp     LT_return               # quit the loop
 is_LT:
         decl    %ecx                    # i --
 LT_condition:
         cmpl    $0,%ecx                 # i >= 0
-        jge      LT_body                 
+        jge      LT_body    
+        cmpl    %r9d,%r8d               # x > y ?
+        setne   %al             
 LT_return:
         popq    %r9
         popq    %r8
@@ -1223,15 +1363,17 @@ BigIntGT:
 GT_body:
         movl    (%rdi,%rcx,4),%r8d      # x_buffer = x[i]
         movl    (%rsi,%rcx,4),%r9d      # y_buffer = y[i]
-        cmpl    %r8d,%r9d               # x > y ?
-        jg      is_GT
+        cmpl    %r9d,%r8d              # x > y ?
+        jge     is_GT
         movb    $0,%al                  # LT_flag = 0
         jmp     GT_return               # quit the loop
 is_GT:
         decl    %ecx                    # i --
 GT_condition:
         cmpl    $0,%ecx                 # i >= 0
-        jge     GT_body                 
+        jge     GT_body
+        cmpl    %r9d,%r8d               # x > y ?
+        setne   %al
 GT_return:
         popq    %r9
         popq    %r8
@@ -1252,6 +1394,7 @@ GT_return:
 // r14 = xdy_bufffer
 // NOTE: this is an implementation of the long division algorithm
 BigIntDiv:
+        pushq   %rbp
 	pushq   %r8
         pushq   %r9
         pushq   %r10
@@ -1259,17 +1402,19 @@ BigIntDiv:
         pushq   %r12
         pushq   %r13
         pushq   %r14
-        movb    $0,%r11b        # set negative = 0
+        xorl    %r11d,%r11d        # set negative = 0
+        xorl    %r12d,%r12d        # set negative = 0
         # treat negative cases
-        call IsBigIntNeg        # test if x is negative
+        call    IsBigIntNeg     # test if x is negative
         cmpl    $0,%eax         # check the return
         je      x_is_positive
         movb    %al,%r11b       # set the negative flag
+        movq    %rdi,%rdi
         call    BigIntNeg       # x = ~x
 x_is_positive:
         pushq   %rdi
         movq    %rsi,%rdi       # x = y
-        call IsBigIntNeg        # test if y is negative
+        call    IsBigIntNeg     # test if y is negative
         cmpl    $0,%eax         # check the return
         je      y_is_positive
         movb    %al,%r12b       # set the negative flag
@@ -1305,6 +1450,8 @@ div_body:
         movq    %rdi,%rsi               # argument y
         movq    %r8,%rdi                # argument mod
         call    BigIntLT                # mod < y
+        popq    %rdi
+        
         cmpl    $1,%eax                 # check the return
         jne     dividend_LT_mod
         # Case he cannot: check if we can get mod an extra bit or if it is the end
@@ -1323,7 +1470,6 @@ dividend_LT_mod:
         movq    %r8,%rdx                # argument destination
         call    BigIntSub               # mod = mod - y                            
         popq    %rdx
-        popq    %rdi
         # this is to store the coeficcient in xdy
         movl    %r9d,%r13d              # aux = num_shifts
         shrl    $3,%r9d                 # to get the index in bytes
@@ -1367,6 +1513,7 @@ ydiv_signal_restored:
         popq    %r10
         popq    %r9
         popq    %r8
+        popq    %rbp
         ret   
 
 // verifies if a BigInt is negative
