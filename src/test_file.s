@@ -1450,8 +1450,8 @@ div_body:
         movq    %rdi,%rsi               # argument y
         movq    %r8,%rdi                # argument mod
         call    BigIntLT                # mod < y
+        popq    %rsi
         popq    %rdi
-        
         cmpl    $1,%eax                 # check the return
         jne     dividend_LT_mod
         # Case he cannot: check if we can get mod an extra bit or if it is the end
@@ -1588,7 +1588,7 @@ BigIntMod:
         pushq   %r14
         movb    $0,%r11b        # set negative = 0
         # treat negative cases
-        call IsBigIntNeg        # test if x is negative
+        call    IsBigIntNeg        # test if x is negative
         cmpl    $0,%eax         # check the return
         je      xmod_is_positive
         movb    %al,%r11b       # set the negative flag
