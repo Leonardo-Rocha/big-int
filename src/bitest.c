@@ -5,6 +5,29 @@
 
 BigInt x, y, r;
 
+void fib(BigInt n, BigInt res)
+{	
+	BigInt* aux1; 
+	BigInt* aux2;
+	aux1 = (BigInt*) calloc(1, sizeof(BigInt));
+	aux2 = (BigInt*) calloc(1, sizeof(BigInt));
+	(*aux1)[0] = 1;
+	(*aux2)[0] = 2;
+    if(BigIntLT(n, *aux2)) 
+		res = n;
+	else
+	{ 
+		BigIntSub(n, *aux1, *aux1); // n - 1
+		BigIntSub(n, *aux2, *aux2); // n - 2
+		fib(*aux1, *aux1);
+		fib(*aux2, *aux2);
+		BigIntAdd(*aux1, *aux2, res);
+	} 
+
+	free(aux1);
+	free(aux2);
+}
+
 int main(int argc, char *argv[])
 {
 	BigIntStr xs = {'\0'}, ys = {'\0'} , rs = {'\0'};
@@ -28,6 +51,10 @@ int main(int argc, char *argv[])
 	}
 	printf("\nEnter the value of x using base %d:\n", base);
 	BigIntRead(x, base);
+
+	// fib(x, y);
+	// BigIntPrint(y, base);
+
 	printf("\nEnter the value of y using base %d:\n", base);
 	BigIntRead(y, base);
 
