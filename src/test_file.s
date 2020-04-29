@@ -2,8 +2,8 @@
 BigInt: .fill 512               # n[512] = {0}
 BigInt2:.fill 512
 BigInt3:.fill 512
-BigIntA:.asciz "15"
-BigIntB:.asciz "3"
+BigIntA:.asciz "4444444444444444"
+BigIntB:.asciz "1111111111111111"
 test_neg: .asciz "\nBigIntNeg(15) = \n"
 test_shl: .asciz "\nBigIntShl(15) = \n"
 test_shr: .asciz "\nBigIntShr(15) = \n"
@@ -16,6 +16,7 @@ test_lt:  .asciz "\nBigIntLT(3,15) = %d\n"
 test_mul: .asciz "\nBigIntMul(3,15) = \n"
 test_sub: .asciz "\nBigIntSub(15,45) = \n"
 test_div: .asciz "\nBigIntDiv(-30,15) = \n"
+test_mod: .asciz "\nBigIntMod(15,-2) = \n"
 
         .text
         .globl _start, BigIntRead, BigIntPrint, BigIntToStr
@@ -32,14 +33,22 @@ _start:
         movq    $BigInt,%rdi # n = BigInt
         movq    $10,%rsi     
         movq    $BigIntA,%rdx
-        movq    $3,%rcx
+        movq    $17,%rcx
         call    _BigIntRead   # BigIntRead(BigInt, 2);
 
         movq    $BigInt2,%rdi # n = BigInt
         movq    $10,%rsi      
         movq    $BigIntB,%rdx
-        movq    $2,%rcx
+        movq    $17,%rcx
         call    _BigIntRead   # BigIntRead(BigInt, 2);
+
+        movq    $BigInt,%rdi
+        movq    $10,%rsi
+        call    BigIntPrint
+
+        movq    $BigInt2,%rdi
+        movq    $10,%rsi
+        call    BigIntPrint
 
         # Test unary operations
         movq    $BigInt,%rdi
@@ -66,7 +75,7 @@ _start:
         call    BigIntShl
 
         movq    $BigInt,%rdi
-        movq    $2,%rsi
+        movq    $10,%rsi
         call    BigIntPrint
 
         movq    $test_shr,%rdi
@@ -78,7 +87,7 @@ _start:
         call    BigIntShar
 
         movq    $BigInt,%rdi
-        movq    $2,%rsi
+        movq    $10,%rsi
         call    BigIntPrint
         
         # Test Logical operations
@@ -92,7 +101,7 @@ _start:
         call    printf
 
         movq    $BigInt2,%rdi
-        movq    $2,%rsi
+        movq    $10,%rsi
         call    BigIntPrint
         
         movq    $BigInt,%rdi
@@ -105,13 +114,13 @@ _start:
         call    printf
 
         movq    $BigInt2,%rdi
-        movq    $2,%rsi
+        movq    $10,%rsi
         call    BigIntPrint
 
         movq    $BigInt2,%rdi # n = BigInt
         movq    $10,%rsi      
         movq    $BigIntB,%rdx
-        movq    $2,%rcx
+        movq    $17,%rcx
         call    _BigIntRead   # BigIntRead(BigInt, 2);
 
         movq    $test_and,%rdi
@@ -124,13 +133,13 @@ _start:
         call    BigIntAnd
 
         movq    $BigInt2,%rdi
-        movq    $2,%rsi
+        movq    $10,%rsi
         call    BigIntPrint
 
         movq    $BigInt2,%rdi # n = BigInt
         movq    $10,%rsi      
         movq    $BigIntB,%rdx
-        movq    $2,%rcx
+        movq    $17,%rcx
         call    _BigIntRead   # BigIntRead(BigInt, 2);
         
         # Test Comparators
@@ -172,7 +181,7 @@ _start:
         call    printf
 
         movq    $BigInt2,%rdi
-        movq    $10,%rsi
+        movq    $8,%rsi
         call    BigIntPrint
 
         movq    $test_sub,%rdi
@@ -198,6 +207,19 @@ _start:
         movq    $test_div,%rdi
         xorl    %eax,%eax
         call    printf
+
+        movq    $BigInt2,%rdi
+        movq    $10,%rsi
+        call    BigIntPrint
+
+        movq    $test_mod,%rdi
+        xorl    %eax,%eax
+        call    printf
+
+        movq    $BigInt,%rdi
+        movq    $BigInt2,%rsi
+        movq    $BigInt2,%rdx
+        call    BigIntMod
 
         movq    $BigInt2,%rdi
         movq    $10,%rsi
@@ -246,7 +268,9 @@ char_return:
         ret
 
 // int BigIntRead(BigInt n, int base);
+// ARGUMENTS
 // rdi = n[]; rsi = base; 
+// LOCAL REGISTERS
 // r8  = rdi 
 // r9 = rsi      
 BigIntRead:
@@ -283,8 +307,9 @@ BigIntRead:
         ret
 
 // int _BigIntRead(BigInt n, int base, char *buffer, size)
+// ARGUMENTS
 // rdi = n[]; rsi = base; rdx = buffer; rcx = size
-// Used registers:
+// LOCAL REGISTERS
 // rbx = n[] 
 // r8 = b (base - 2, 8, 10, 16)
 // r9 = log2(base)
@@ -458,7 +483,13 @@ no_dealloc:
         ret
 
 // void BigIntScale_by10(BigInt n, int numBytes)
+// ARGUMENTS
 // rdi = BigInt n[], rsi = numBytes 
+// LOCAL REGISTERS
+// r12 = n[k]
+// r13 = temp
+// r14 = i
+// r15 = temp
 BigIntScale_by10:
         pushq   %r12
         pushq   %r13
@@ -496,7 +527,12 @@ scale_cond:
 // Print a BigInt n in the base b.		
 // The base can be 2, 8, 10 or 16.		
 // int BigIntPrint(BigInt n, int b);	
+// ARGUMENTS
 // rdi = n[]; rsi = base;
+// LOCAL REGISTERS
+// rbx = BigIntToStr
+// r9 = i
+// r8 = n[i]
 BigIntPrint:
         pushq	%rbp
         pushq   %rbx 
@@ -550,7 +586,9 @@ print_return:
 // Convert n to string in the base b.		
 // The base can be 2, 8, 10 or 16.		
 // char *BigIntToStr(BigInt n, char *buf, int b); 
+// ARGUMENTS
 // rdi = n, rsi = *buf, rdx = b
+// LOCAL REGISTERS
 // rbx = n[] 
 // r8 = b (base - 2, 8, 10, 16)
 // r9 = log2(base) // decimal_copy
@@ -704,9 +742,11 @@ to_string_return:
         ret
 
 // ConsumeStringZeros( char * string, int size, int isNeg)
+// ARGUMENTS
 // rdi = string
 // rsi = size
 // rdx = is neg
+// LOCAL REGISTERS
 // rcx = j
 // r8  = char_buffer
 // r9  = address_aux
@@ -750,11 +790,16 @@ consume_string_return:
         popq    %r8
         popq    %rcx
         ret
-        
-// * Note that this does not decrement. the reason why we stick with the superior limit is because 
-//   it would be costly, or even impossible, to verify when one byte 
-//   no longer has information about the next printed decimal character.
-# Bigint n = %rdi, numBytes = %rsi
+
+// int BigIntDiv10(BigInt n, int numBytes)
+// ARGUMENTS
+// Bigint n = %rdi, numBytes = %rsi
+// LOCAL REGISTERS
+// r8 = n[i]
+// r9 = quociente
+// r10 = mod result
+// rdx = magic number
+// eax = Bigint % 10         
 BigIntDiv10: 
         pushq   %rbp            # store frame
         pushq   %rdx
@@ -801,7 +846,11 @@ DIV_RETURN:
 
 // Size must be a number of characters
 // int CalculateReadReverseCounter(int size, int log2Base)
+// ARGUMENTS
 // %rdi = size, %rsi = log2Base
+// LOCAL REGISTERS
+// rdx = higher 64 bits of mul
+// r13 = temp
 CalculateReadReverseCounter:       
         pushq   %rdx            
         pushq   %r13
@@ -821,9 +870,13 @@ no_RC_increment:
 
 // Size must be a number of bits
 // int CalculateWriteReverseCounter(int size, int log2Base)
+// ARGUMENTS
 // %rdi = size, %rsi = log2Base
-CalculateWriteReverseCounter:   # 1223334444 f(4,3) -> 3
-        pushq   %r13            # 00F0F0F0     f(4,4) -> 0       
+// LOCAL REGISTERS
+// ecx = temp
+// r13 = temp
+CalculateWriteReverseCounter:   
+        pushq   %r13                 
         pushq   %rcx            
         movl    %edi,%r13d      # t13 = reverse_counter = size
         cmpl    $3,%esi
@@ -863,7 +916,9 @@ write_reverse_return:
 
 // BigIntSub: xmy = x - y	
 // void BigIntSub(BigInt x, BigInt y, BigInt xmy);
+// ARGUMENTS
 // rdi = x; rsi = y; rdx = xmy	
+// LOCAL REGISTERS
 // r8 = local xmy
 BigIntSub:
         pushq   %rbp 
@@ -880,8 +935,10 @@ BigIntSub:
         call    BigIntNeg       # local xmy = -y
         popq    %rdi
         
+        pushq   %rsi
         movq    %r8,%rsi 
         call    BigIntAdd       # xmy = x + local xmy = x + (-y)
+        popq    %rsi
 
         addq    $512,%rsp
         popq    %r8
@@ -890,7 +947,9 @@ BigIntSub:
 
 // BigIntAdd: xpy = x + y				
 // void BigIntAdd(BigInt x, BigInt y, BigInt xpy);	
+// ARGUMENTS
 // rdi = x; rsi = y; rdx = xpy
+// LOCAL REGISTERS
 // rcx = i
 // r8 = x[i]
 // r9 = y[i]
@@ -935,6 +994,12 @@ add_cond:
 
 // BigIntNeg: x = ~x		
 // void BigIntNeg(BigInt x);
+// ARGUMENTS
+// rdi = x
+// LOCAL REGISTERS
+// rcx = i
+// r8 = x[i]
+// r9 = carry
 BigIntNeg:
 	pushq   %rcx
         pushq   %r8
@@ -963,7 +1028,7 @@ neg_cond:
 // rdi = x
 // rsi = y
 // rdx = xty    
-// LOCALS
+// LOCAL REGISTERS
 // rcx = i
 // r8  = num_shifts
 // r9  = y_buffer
@@ -1045,8 +1110,10 @@ mul_condition:
 
 // BigIntAssign: x = y				
 // void BigIntAssign(BigInt x, BigInt y);
+// ARGUMENTS
 // rdi = x
 // rsi = y
+// LOCAL REGISTERS
 // rcx = i
 // r8  = buffer	
 BigIntAssign:
@@ -1068,21 +1135,28 @@ assign_condition:
         ret
 
 // BigIntShl:   bi = bi << num_shifts
+// ARGUMENTS
 // rdi: BigInt bi
 // rsi: int num_shifts
+// LOCAL REGISTERS
 // rcx: current_shifts
 // r8 : bi_buffer
 // r9 : internal iterator : i
-// r10: prev_shift_letfover 
+// r10: prev_shift_letfover
+// r11: temp
 BigIntShl:
         pushq   %rcx
         pushq   %r8
         pushq   %r9
         pushq   %r10                
+        pushq   %r11
         jmp     shl_condition
 shl_body:
         movl    %esi,%ecx               # current_shifts = num_shifts
-        andl    $0x01F,%ecx             # current_shifts % 32
+        cmpl    $32,%ecx
+        jb      in_shl_limit
+        movl    $31,%ecx
+in_shl_limit:
         subl    %ecx,%esi               # calculate remaining shifts
         movl    $0,%r9d                 # i = 0
         movl    $0,%r10d                # prev_shift_leftover = 0
@@ -1090,12 +1164,12 @@ shl_body:
 shl_intern_body:
         movl    (%rdi,%r9,4),%r8d       # bi_buffer = bi[i] ;32 bits at time 
         shlq    %cl,%r8                 # bi_buffer << current_shifts
-        addl    %r10d,%r8d              # bi_buffer += prev_shift_leftover
-        movl    %r8d,(%rdi,%r9,4)         # bi[i] = bi[i] << current_shifts
-        # TODO: verify if it is possible to shift 32 at once
-        shrq    $16,%r8
-        shrq    $16,%r8                 # cleans the attributed 32 bits
-        movl    %r8d,%r10d              # store the leftover
+        addq    %r10,%r8              # bi_buffer += prev_shift_leftover
+        movq    %r8,%r11
+        movl    %r8d,(%rdi,%r9,4)       # bi[i] = bi[i] << current_shifts
+        shrq    $16,%r11
+        shrq    $16,%r11                # cleans the attributed 32 bits
+        movl    %r11d,%r10d             # store the leftover
         incl    %r9d                    # i++
 shl_intern_condition:
         cmpl    $128 ,%r9d              # i < 128
@@ -1104,6 +1178,7 @@ shl_condition:
         cmpl    $0,%esi                 # num_shifts > 0
         jg      shl_body
 
+        popq    %r11
         popq    %r10
         popq    %r9
         popq    %r8
@@ -1111,8 +1186,10 @@ shl_condition:
         ret
 
 // BigIntShar:   bi = bi << num_shifts
+// ARGUMENTS
 // rdi: BigInt bi
 // rsi: int num_shifts
+// LOCAL REGISTERS
 // rcx: current_shifts
 // r8 : bi_buffer
 // r9 : internal iterator : i
@@ -1127,7 +1204,10 @@ BigIntShar:
         jmp     shar_condition
 shar_body:
         movl    %esi,%ecx               # current_shifts = num_shifts
-        andl    $0x01F,%ecx             # current_shifts % 32
+        cmpl    $32,%ecx
+        jb      in_shar_limit
+        movl    $31,%ecx
+in_shar_limit:
         subl    %ecx,%esi               # calculate remaining shifts
         movl    $128,%r9d               # i = 128
         movl    $0,%r10d                # prev_shift_leftover = 0
@@ -1140,7 +1220,6 @@ shar_intern_body:
         shrq    $31,%r8                 # bi_buffer >> 31
         addl    %r10d,%r8d              # bi_buffer += prev_shift_leftover
         movl    %r8d,-4(%rdi,%r9,4)     # bi[i] = bi[i-1] >> current_shifts
-        # TODO: verify if it is possible to shift 32 at once
         movl    %r11d,%r10d             # get the next leftover
         shll    %r10d                   # fix to complete 1 + 31 = 32
         decl    %r9d                    # i++
@@ -1164,7 +1243,7 @@ shar_condition:
 // rdi = x
 // rsi = y_buffer
 // rdx = xay
-// LOCALS
+// LOCAL REGISTERS
 // rcx = i
 // r8  = x_buffer
 // r9  = y_buffer
@@ -1196,7 +1275,7 @@ and_condition:
 // rdi = x
 // rsi = y_buffer
 // rdx = xay
-// LOCALS
+// LOCAL REGISTERS
 // rcx = i
 // r8  = x_buffer
 // r9  = y_buffer
@@ -1224,7 +1303,9 @@ or_condition:
 	
 // BigIntZero: n[i] = 0, 0 <= i <= 512
 // void BigIntZero(BigInt n)
+// ARGUMENTS
 // rdi = n
+// LOCAL REGISTERS
 // rcx = i
 BigIntZero:
         pushq   %rcx
@@ -1245,7 +1326,7 @@ zero_condition:
 // rdi = x
 // rsi = y
 // rdx = xxy
-// LOCALS
+// LOCAL REGISTERS
 // rcx = i
 // r8  = x_buffer
 // r9  = y_buffer
@@ -1273,8 +1354,10 @@ xor_condition:
 
 // BigIntEq: returns x == y	
 // int BigIntEq(BigInt x, BigInt y);
+// ARGUMENTS
 // rdi = x
 // rsi = y
+// LOCAL REGISTERS
 // rcx = i 
 // r8  = x_buffer 
 // r9  = y_buffer
@@ -1308,8 +1391,10 @@ equals_return:
 
 // BigIntLT: returns x < y	
 // int BigIntLT(BigInt x, BigInt y);
+// ARGUMENTS
 // rdi = x
 // rsi = y
+// LOCAL REGISTERS
 // rcx = i 
 // r8  = x_buffer 
 // r9  = y_buffer
@@ -1345,8 +1430,10 @@ LT_return:
 
 // BigIntGT: returns x > y	
 // int BigIntGT(BigInt x, BigInt y);
+// ARGUMENTS
 // rdi = x
 // rsi = y
+// LOCAL REGISTERS
 // rcx = i 
 // r8  = x_buffer 
 // r9  = y_buffer
@@ -1382,10 +1469,11 @@ GT_return:
 
 // BigIntDiv: xdy = x / y	
 // void BigIntDiv(BigInt x, BigInt y, BigInt xdy);
+// ARGUMENTS
 // rdi = x
 // rsi = y
 // rdx = xdy
-// r8  = BigInt mod
+// LOCAL REGISTERS
 // r9  = x_size
 // r10 = y_size
 // r11 = x_negative
@@ -1395,41 +1483,53 @@ GT_return:
 // NOTE: this is an implementation of the long division algorithm
 BigIntDiv:
         pushq   %rbp
-	pushq   %r8
+        pushq   %rcx
+        pushq   %r8
         pushq   %r9
         pushq   %r10
         pushq   %r11
         pushq   %r12
         pushq   %r13
         pushq   %r14
+        
         xorl    %r11d,%r11d        # set negative = 0
         xorl    %r12d,%r12d        # set negative = 0
-        # treat negative cases
-        call    IsBigIntNeg     # test if x is negative
-        cmpl    $0,%eax         # check the return
-        je      x_is_positive
-        movb    %al,%r11b       # set the negative flag
-        movq    %rdi,%rdi
-        call    BigIntNeg       # x = ~x
-x_is_positive:
-        pushq   %rdi
-        movq    %rsi,%rdi       # x = y
-        call    IsBigIntNeg     # test if y is negative
-        cmpl    $0,%eax         # check the return
-        je      y_is_positive
-        movb    %al,%r12b       # set the negative flag
-        call    BigIntNeg       # y = ~y
-y_is_positive:        
-        popq    %rdi
-        # make a big int local: mod
+        
+        # make 2 big int locals: mod and dividend
         subq    $512,%rsp       # allocate 512 bytes for BigInt mod in the stack
-        movq    %rsp,%r8      # get the effective address of mod
-        pushq   %rdi
+        movq    %rsp,%r8        # get the effective address of mod
         pushq   %rsi
         movq    %rdi,%rsi            
         movq    %r8,%rdi
         call    BigIntAssign    # mod = x (fully)
         popq    %rsi
+        # rdi -> mod
+        subq    $512,%rsp       # allocate 512 bytes for BigInt mod in the stack
+        movq    %rsp,%r8        # get the effective address of mod
+        pushq   %rdi            
+        movq    %r8,%rdi
+        call    BigIntAssign    # dividend = y (fully)
+        movq    %r8,%rsi
+        # rsi -> dividend 
+        movq    %rdx,%rdi 
+        call    BigIntZero
+        popq    %rdi
+        # treat negative cases
+        call    IsBigIntNeg     # test if mod is negative
+        cmpl    $0,%eax         # check the return
+        je      x_is_positive
+        addb    %al,%r11b       # set the negative flag
+        movq    %rdi,%rdi
+        call    BigIntNeg       # mod = ~mod
+x_is_positive:
+        pushq   %rdi
+        movq    %rsi,%rdi       # x = divdend
+        call    IsBigIntNeg     # test if divdend is negative
+        cmpl    $0,%eax         # check the return
+        je      y_is_positive
+        addb    %al,%r11b       # set the negative flag
+        call    BigIntNeg       # divdend = ~divdend
+y_is_positive:      
         popq    %rdi
         # calculate the size in bits of x and y
         pushq   %rdi
@@ -1443,15 +1543,18 @@ div_body:
         pushq   %rdi
         pushq   %rsi
         # We will shift the dividend as in long division algorithm
-        movq    %rsi,%rdi               # argument BigInt y
+        movq    %rsi,%rdi               # argument BigInt divdend
         movl    %r9d,%esi               # argument num_shifts
-        call    BigIntShl               # y << num_shifts
+        call    BigIntShl               # divdend << num_shifts
         # this is to check if the shifted dividend can fit in mod
-        movq    %rdi,%rsi               # argument y
-        movq    %r8,%rdi                # argument mod
-        call    BigIntLT                # mod < y
         popq    %rsi
         popq    %rdi
+        
+        pushq   %rdi
+        pushq   %rsi
+        call    BigIntLT        # mod < divdend
+        popq    %rsi
+        popq    %rdi            
         cmpl    $1,%eax                 # check the return
         jne     dividend_LT_mod
         # Case he cannot: check if we can get mod an extra bit or if it is the end
@@ -1459,53 +1562,68 @@ div_body:
         je      div_return
         # shifts dividend right, effectively giving mod an extra bit
         decl    %r9d                    # num_shifts --
-        movq    %rsi,%rdi               # argument y
+        pushq   %rdi
+        pushq   %rsi
+        movq    %rsi,%rdi               # argument divdend
         movl    $1,%esi                 # argument num_shifts
-        call    BigIntShar              # y >>
+        call    BigIntShar              # divdend >>
         popq    %rsi
+        popq    %rdi
 dividend_LT_mod:        
+        
         # this is subtraction of the long division 
+        pushq   %rdi
+        pushq   %rsi
         pushq   %rdx
-        movq    %r8,%rdi                # argument mod
-        movq    %r8,%rdx                # argument destination
-        call    BigIntSub               # mod = mod - y                            
+        movq    %rdi,%rdx                # argument destination
+        call    BigIntSub               # mod = mod - divdend                            
         popq    %rdx
+        popq    %rsi
+        popq    %rdi
         # this is to store the coeficcient in xdy
         movl    %r9d,%r13d              # aux = num_shifts
+        pushq   %r9
         shrl    $3,%r9d                 # to get the index in bytes
         movb    (%rdx,%r9),%r14b        # xdy_buffer = byte of interest  
         andl    $0x07,%r13d             # aux = num_shifts % 8
         movb    $1,%al                  # bit_buffer
-        
+
         pushq   %rcx
         movb    %r13b,%cl               # shl must be used with cl
         shlb    %cl,%al                 # so we can set the right bit
         addb    %al,%r14b               # so we dont lose info
         movb    %r14b,(%rdx,%r9)        # xdy [num_shifts] = xdy_buffer
         popq    %rcx
+        # we need to return dividend to its original position
+        popq    %r9
+        pushq   %rdi
+        pushq   %rsi
+        # We will shift back the dividend as in long division algorithm
+        movq    %rsi,%rdi               # argument BigInt divdend
+        movl    %r9d,%esi               # argument num_shifts
+        call    BigIntShar              # divdend >> num_shifts
+        popq    %rsi
+        popq    %rdi
+        
         # we get the remaining size in mod to see if we can make another step in the division
 div_cond:        
         pushq   %rdi
-        movq    %r8,%rdi
         call    GetBigIntSizeInBits     # get the size in bits of mod
         movl    %eax,%r9d               # catch the return
         popq    %rdi
         cmpl    %r10d,%r9d              # size_mod >= size_y        
         jge     div_body        
         # restore temporaries, dealoccate mod, undo negations
-div_return:        
-        cmpb    $0,%r11b
-        je      xdiv_signal_restored
-        call    BigIntNeg       # x = ~x
-xdiv_signal_restored:   
-        cmpb    $0,%r12b
-        je      ydiv_signal_restored
-        pushq   %rdi
-        movq    %rsi,%rdi
-        call    BigIntNeg       # y = ~y
-        popq    %rdi
-ydiv_signal_restored:
-        addq    $512,%rsp
+div_return:
+        testb   $0x01,%r11b
+        je      not_neg_out
+        pushq   %rdi    
+        movq    %rdx,%rdi
+        call    BigIntNeg
+        popq    %rdi        
+not_neg_out:
+        movq    %rdi,%rax
+        addq    $1024,%rsp
         popq    %r14
         popq    %r13
         popq    %r12
@@ -1513,11 +1631,14 @@ ydiv_signal_restored:
         popq    %r10
         popq    %r9
         popq    %r8
+        popq    %rcx
         popq    %rbp
         ret   
 
 // verifies if a BigInt is negative
+// ARGUMENTS
 // rdi = x
+// LOCAL REGISTERS
 // r8  = buffer
 // r9  = addres_aux
 // rax = return flag 
@@ -1534,7 +1655,9 @@ IsBigIntNeg:
         ret
 
 // Returns the size in bits of a BigInt
+// ARGUMENTS
 // rdi  = x 
+// LOCAL REGISTERS
 // r8   = size in bits
 // r9   = byte_aux
 GetBigIntSizeInBits:
@@ -1567,113 +1690,35 @@ get_size_return:
 
 // BigIntMod: xmy = x % y	
 // void BigIntMod(BigInt x, BigInt y, BigInt xmy);
+// ARGUMENTS
 // rdi = x
 // rsi = y
 // rdx = xdy
-// r8  = xmy_bufffer
-// r9  = x_size
-// r10 = y_size
-// r11 = x_negative
-// r12 = y_negative
-// r13 = addres_aux
-// r14 = xmy_bufffer
+// LOCAL REGISTERS
+// r8  = x_neg
+// r9  = y_neg
 // NOTE: this is an implementation of the long division algorithm
 BigIntMod:
-	pushq   %r8
-        pushq   %r9
-        pushq   %r10
-        pushq   %r11
-        pushq   %r12
-        pushq   %r13
-        pushq   %r14
-        movb    $0,%r11b        # set negative = 0
-        # treat negative cases
-        call    IsBigIntNeg        # test if x is negative
-        cmpl    $0,%eax         # check the return
-        je      xmod_is_positive
-        movb    %al,%r11b       # set the negative flag
-        call    BigIntNeg       # x = ~x
-xmod_is_positive:
-        pushq   %rdi
-        movq    %rsi,%rdi       # x = y
-        call    IsBigIntNeg     # test if y is negative
-        cmpl    $0,%eax         # check the return
-        je      ymod_is_positive
-        movb    %al,%r12b       # set the negative flag
-        call    BigIntNeg       # y = ~y
-ymod_is_positive:        
-        popq    %rdi
-        # calculate the size in bits of x and y
-        pushq   %rdi
-        movq    %rsi,%rdi               
-        call    GetBigIntSizeInBits     # get the size in bits of the dividend
-        movl    %eax,%r10d              # catch the return
-        popq    %rdi
-        # Assign x to xmy  
-        pushq   %rdi
-        pushq   %rsi
-        movq    %rdi,%rsi            
-        movq    %rbx,%rdi
-        call    BigIntAssign            # xmy = x (fully)
-        popq    %rsi
-        popq    %rdi
-mod_body:
-        subl    %r10d,%r9d              # calculate the shift of the dividend
-        pushq   %rdi
-        pushq   %rsi
-        # We will shift the dividend as in long division algorithm
-        movq    %rsi,%rdi               # argument BigInt y
-        movl    %r9d,%esi               # argument num_shifts
-        call    BigIntShl               # y << num_shifts
-        # this is to check if the shifted dividend can fit in mod
-        movq    %rdx,%rsi                # argument mod
-        call    BigIntGT                # y > mod
-        cmpl    $1,%eax                 # check the return
-        jne     mod_dividend_LT_mod
-        # Case he cannot: check if we can get mod an extra bit or if it is the end
-        cmpl    $0,%r9d                 # num_shifts > 0
-        je      mod_return
-        # shifts dividend right, effectively giving mod an extra bit
-        decl    %r9d                    # num_shifts --
-        movl    $1,%esi                 # argument num_shifts
-        call    BigIntShar              # y >>
-        popq    %rsi
-mod_dividend_LT_mod:        
-        # this is subtraction of the long division 
-        pushq   %rdx
-        movq    %rdx,%rdi                # argument mod
-        movq    %rdx,%rdx                # argument destination
-        call    BigIntSub               # mod = mod - y                            
-        popq    %rdx
-        popq    %rdi
-        # we get the remaining size in mod to see if we can make another step in the division
-mod_cond:        
-        pushq   %rdi
-        movq    %r8,%rdi
-        call    GetBigIntSizeInBits     # get the size in bits of mod
-        movl    %eax,%r9d               # catch the return
-        popq    %rdi
-        cmpl    %r10d,%r9d              # size_mod >= size_y        
-        jb      mod_body        
-        # restore temporaries, dealoccate mod
-mod_return:        
-        cmpb    $0,%r11b
-        je      xmod_signal_restored
-        call    BigIntNeg       # x = ~x
-xmod_signal_restored:   
-        cmpb    $0,%r12b
-        je      ymod_signal_restored
-        pushq   %rdi
-        movq    %rsi,%rdi
-        call    BigIntNeg       # y = ~y
-        popq    %rdi
-ymod_signal_restored:
-        addq    $512,%rsp
-        popq    %r14
-        popq    %r13
-        popq    %r12
-        popq    %r11
-        popq    %r10
-        popq    %r9
-        popq    %r8
-        ret 
+       call     BigIntDiv
+       pushq    %rdi
+       pushq    %rsi
+       movq     %rdx,%rdi 
+       movq     %rax,%rsi
+       call     BigIntAssign
+       popq     %rsi
+       popq     %rdi
+       call     IsBigIntNeg
+       cmpl     $0,%eax
+       je       mod_ret
+       pushq    %rdi
+       pushq    %rsi
+       movq     %rsi,%rdi
+       call     IsBigIntNeg
+       cmpl     $0,%eax
+       je       mod_ret
+       movq     %rdx,%rdi
+       call     BigIntNeg
+       popq     %rsi
+       popq     %rdi 
+mod_ret:
+       ret
